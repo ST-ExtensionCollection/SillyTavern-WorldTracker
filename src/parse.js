@@ -26,13 +26,13 @@ function preclean(s) {
     } catch { /* ignore */ }
 
     // Harmony: if there's a final channel, everything before it is reasoning.
-    const finalMarker = t.match(/<\|channel\|?>\s*final\s*<\|message\|?>/i);
+    const finalMarker = t.match(/<\|?channel\|?>\s*final\b[\s\S]{0,40}?<\|?message\|?>/i);
     if (finalMarker) t = t.slice(finalMarker.index + finalMarker[0].length);
 
     t = t
-        .replace(/<\|channel\|?>[\s\S]*?<\|message\|?>/gi, '')
-        .replace(/<\|(?:start|end|return|constrain)\|?>/gi, '')
-        .replace(/<\|channel\|?>\s*\w+/gi, '')
+        .replace(/<\|?channel\|?>[\s\S]*?<\|?message\|?>/gi, '')
+        .replace(/<\|?(?:start|end|return|constrain|message|channel)\|?>/gi, '')
+        .replace(/<\|?channel\|?>\s*\w+/gi, '')
         .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
         .replace(/<\/?(?:think|thinking|thought|reasoning|analysis)>/gi, '');
 

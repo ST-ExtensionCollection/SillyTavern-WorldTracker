@@ -39,13 +39,25 @@ export async function runTrackerRequest(messages, settings, ctx, signal) {
 
     if (profile && ctx.ConnectionManagerRequestService) {
         log(`request via connection profile "${profile.name}" (max_tokens ${maxTokens}, effort ${settings.reasoningEffort || 'default'})`);
+        // Stream it: a non-streaming request runs to completion on the backend
+        // even after the client aborts (the abort only lands at send time). A
+        // streamed request dies the moment the connection drops — that's how
+        // ST's own Stop button cancels KoboldCPP cleanly.
         const out = await ctx.ConnectionManagerRequestService.sendRequest(
             profile.id,
             messages,
             maxTokens,
-            { extractData: true, signal, includePreset: false, includeInstruct: false },
+            { stream: true, extractData: true, signal, includePreset: false, includeInstruct: false },
             override,
         );
+        if (typeof out === 'function') {
+            let text = '';
+            for await (const chunk of out()) {
+                if (signal?.aborted) break;
+                text = typeof chunk === 'string' ? chunk : (chunk?.text ?? text);
+            }
+            return text;
+        }
         return textFrom(out);
     }
 

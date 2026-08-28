@@ -5,6 +5,7 @@
 // never touches locked fields. applyProposal() commits one proposal.
 
 import { addElapsed, format, deltaToSeconds } from './clock.js';
+import { fmtNum } from './ui/format.js';
 import * as state from './state.js';
 
 /** Loose equality for field values (trim strings, compare numbers numerically). */
@@ -24,18 +25,19 @@ function coerce(field, v) {
     return typeof v === 'string' ? v.trim() : v;
 }
 
-function displayVal(field, v, state_) {
-    if (field?.type === 'number' && field.unit) return `${v}${field.unit}`;
-    if (field?.type === 'number' && field.max != null) return `${v}/${field.max}`;
+function displayVal(field, v) {
+    if (field?.type === 'number' && field.unit) return `${fmtNum(v)}${field.unit}`;
+    if (field?.type === 'number' && field.max != null) return `${fmtNum(v)}/${fmtNum(field.max)}`;
+    if (field?.type === 'number') return fmtNum(v);
     return String(v);
 }
 
-function fieldProposal(path, label, field, incoming, state_, sourceMessageId) {
+function fieldProposal(path, label, field, incoming, sourceMessageId) {
     const to = coerce(field, incoming);
     return {
         path, label, kind: 'field',
-        from: displayVal(field, field.value, state_),
-        to: displayVal(field, to, state_),
+        from: displayVal(field, field.value),
+        to: displayVal(field, to),
         rawTo: to,
         sourceMessageId,
     };
@@ -76,7 +78,7 @@ export function diffToProposals(st, data, opts = {}) {
         for (const [k, v] of Object.entries(data.world)) {
             const f = st.world[k];
             if (!f || f.locked || v == null || sameValue(f, v)) continue;
-            out.push(fieldProposal(`world.${k}`, k, f, v, st, sourceMessageId));
+            out.push(fieldProposal(`world.${k}`, k, f, v, sourceMessageId));
         }
     }
 
@@ -87,7 +89,7 @@ export function diffToProposals(st, data, opts = {}) {
             if (!f || f.locked || v == null) continue;
             const nv = coerce(f, v);
             if (sameValue(f, nv)) continue;
-            out.push(fieldProposal(`userStats.${k}`, k, f, nv, st, sourceMessageId));
+            out.push(fieldProposal(`userStats.${k}`, k, f, nv, sourceMessageId));
         }
     }
 
@@ -106,7 +108,7 @@ export function diffToProposals(st, data, opts = {}) {
             for (const [fk, v] of Object.entries(fields || {})) {
                 const f = entry.fields[fk];
                 if (!f || f.locked || v == null || sameValue(f, v)) continue;
-                out.push(fieldProposal(`characters.${name}.fields.${fk}`, `${name} · ${fk}`, f, v, st, sourceMessageId));
+                out.push(fieldProposal(`characters.${name}.fields.${fk}`, `${name} · ${fk}`, f, v, sourceMessageId));
             }
         }
     }

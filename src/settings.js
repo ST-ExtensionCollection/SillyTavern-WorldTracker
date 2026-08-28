@@ -38,6 +38,10 @@ function defaultSettings() {
         dockSide: 'right',          // 'left' | 'right'
         showLockIcons: true,
 
+        // --- injection into the main chat ---
+        injectState: true,          // feed the tracked state to the roleplay model
+        injectionDepth: 1,          // IN_CHAT depth for the injection
+
         // --- prompt ---
         promptOverrides: {},        // { system?: string, instruction?: string }
 

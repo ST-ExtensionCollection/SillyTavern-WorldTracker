@@ -9,7 +9,8 @@ import { buildTrackerPrompt } from './src/prompt.js';
 import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
 import { diffToProposals, applyProposal } from './src/merge.js';
-import { initPanel, renderPanel, destroyPanel, replaceBanner, setBusy } from './src/ui/panel.js';
+import { updateInjection } from './src/inject.js';
+import { initPanel, renderPanel, replaceBanner, setBusy } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
 const {
@@ -31,6 +32,7 @@ function getState() {
 
 function refresh() {
     renderPanel();
+    try { updateInjection(ctx, settings.enabled ? getState() : null, settings); } catch (e) { log('injection error', e); }
 }
 
 // ---------------------------------------------------------------------------
@@ -284,11 +286,20 @@ function buildSettingsDrawer() {
                         <option value="user">After my messages</option>
                         <option value="both">After every message</option>
                     </select>
-                    <small class="notes">Auto-update fires in a later milestone; setting is stored now.</small>
+                    <small class="notes">Fires a tracker update automatically after a rendered message (debounced, skipped while generating).</small>
                 </div>
                 <div class="wt-setting-row">
                     <label for="wt-ctx-msgs">Messages of context</label>
                     <input type="number" id="wt-ctx-msgs" class="text_pole" min="1" max="40">
+                </div>
+                <label class="checkbox_label">
+                    <input type="checkbox" id="wt-inject">
+                    <span>Feed tracked state to the roleplay model</span>
+                </label>
+                <div class="wt-setting-row">
+                    <label for="wt-inject-depth">Injection depth</label>
+                    <input type="number" id="wt-inject-depth" class="text_pole" min="0" max="20">
+                    <small class="notes">How deep in the chat the [World State] block is inserted (0 = most recent).</small>
                 </div>
                 <div class="wt-setting-row">
                     <label for="wt-answer-tok">Answer token budget</label>
@@ -352,11 +363,20 @@ function buildSettingsDrawer() {
     });
     $effort.on('change', function () { settings.reasoningEffort = this.value; saveSettingsDebounced(); });
 
+    const $inject = $('#wt-inject').prop('checked', settings.injectState !== false);
+    const $injectDepth = $('#wt-inject-depth').val(Number(settings.injectionDepth) || 0);
+    $inject.on('change', function () { settings.injectState = this.checked; saveSettingsDebounced(); refresh(); });
+    $injectDepth.on('change', function () {
+        settings.injectionDepth = Math.max(0, Math.min(20, Number(this.value) || 0));
+        this.value = settings.injectionDepth;
+        saveSettingsDebounced();
+        refresh();
+    });
+
     $enabled.on('change', function () {
         settings.enabled = this.checked;
         saveSettingsDebounced();
-        if (settings.enabled) refresh();
-        else destroyPanel();
+        refresh();
     });
     $locks.on('change', function () { settings.showLockIcons = this.checked; saveSettingsDebounced(); refresh(); });
     $auto.on('change', function () { settings.autoMode = this.value; saveSettingsDebounced(); });
@@ -427,6 +447,29 @@ jQuery(async () => {
         stopUpdate('chat-changed'); // don't apply another chat's tracker result here
         state.get(settings.schema); // seed/reconcile for the new chat
         refresh();
+    });
+
+    // --- auto-update after messages ---
+    let genActive = false;
+    let autoTimer = null;
+    const autoUpdate = (why) => {
+        clearTimeout(autoTimer);
+        autoTimer = setTimeout(() => {
+            if (!settings.enabled || genActive || updateJob) return;
+            if (!getState()) return;
+            log(`auto-update (${why})`);
+            onManualUpdate();
+        }, Math.max(200, Number(settings.debounceMs) || 1200));
+    };
+    eventSource.on(event_types.GENERATION_STARTED, () => { genActive = true; });
+    for (const ev of ['GENERATION_ENDED', 'GENERATION_STOPPED']) {
+        if (event_types[ev]) eventSource.on(event_types[ev], () => { genActive = false; });
+    }
+    eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, () => {
+        if (['ai', 'both'].includes(settings.autoMode)) autoUpdate('ai message');
+    });
+    eventSource.on(event_types.USER_MESSAGE_RENDERED, () => {
+        if (['user', 'both'].includes(settings.autoMode)) autoUpdate('user message');
     });
 
     // The chat layout (#sheld) and sibling extensions like TopInfoBar may not be

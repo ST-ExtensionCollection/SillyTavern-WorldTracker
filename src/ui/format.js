@@ -3,6 +3,13 @@
 
 import * as clock from '../clock.js';
 
+/** Group digits with thousands separators; pass non-numbers through. */
+export function fmtNum(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return String(v);
+    return n.toLocaleString('en-US', { maximumFractionDigits: 6 });
+}
+
 /** Text shown for a field's current value. */
 export function displayValue(path, field, state) {
     if (!field) return '—';
@@ -11,8 +18,9 @@ export function displayValue(path, field, state) {
     }
     const v = field.value;
     if (v === '' || v == null) return '—';
-    if (field.type === 'number' && field.unit) return `${v}${field.unit}`;
-    if (field.type === 'number' && field.max != null) return `${v}/${field.max}`;
+    if (field.type === 'number' && field.unit) return `${fmtNum(v)}${field.unit}`;
+    if (field.type === 'number' && field.max != null) return `${fmtNum(v)}/${fmtNum(field.max)}`;
+    if (field.type === 'number') return fmtNum(v);
     return String(v);
 }
 

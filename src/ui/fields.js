@@ -39,16 +39,17 @@ export function fieldRow(path, field, state, opts = {}) {
             const cur16 = toIso(state.clock.iso).slice(0, 16); // YYYY-MM-DDTHH:mm
             const exp = state.clock.expectedInterval || { days: 0, hours: 0, minutes: 0, seconds: 0 };
             const presets = Array.isArray(state.clock.intervalPresets) ? state.clock.intervalPresets : [];
-            const dhms = (cls, src) => `
+            const dhms = (cls, src) => `<span class="wt-clock-fields">
                 <input type="number" class="${INP} ${cls}-d" min="0" placeholder="d" value="${src && src.days || ''}">
                 <input type="number" class="${INP} ${cls}-h" min="0" placeholder="h" value="${src && src.hours || ''}">
                 <input type="number" class="${INP} ${cls}-m" min="0" placeholder="m" value="${src && src.minutes || ''}">
-                <input type="number" class="${INP} ${cls}-s" min="0" placeholder="s" value="${src && src.seconds || ''}">`;
+                <input type="number" class="${INP} ${cls}-s" min="0" placeholder="s" value="${src && src.seconds || ''}">
+            </span>`;
             $editor = $(`
                 <div class="wt-field-editor wt-clock-editor">
                     <div class="wt-clock-line">
                         <label>Set</label>
-                        <input type="datetime-local" class="${INP} wt-clock-abs" value="${esc(cur16)}" step="60">
+                        <span class="wt-clock-fields"><input type="datetime-local" class="${INP} wt-clock-abs" value="${esc(cur16)}" step="60"></span>
                     </div>
                     <div class="wt-clock-line">
                         <label>Advance</label>
@@ -58,11 +59,13 @@ export function fieldRow(path, field, state, opts = {}) {
                         <label title="Fallback time to add if you reject the model's reported elapsed">Expected next</label>
                         ${dhms('wt-exp', exp)}
                     </div>
-                    ${presets.length ? `<div class="wt-clock-line wt-clock-presets">${presets.map((p, i) =>
-                        `<button class="${BTN} wt-preset" data-i="${i}">${esc(p.name)}</button>`).join('')}</div>` : ''}
-                    <div class="wt-clock-line wt-clock-actions">
-                        <button class="${BTN} wt-edit-ok"><i class="fa-solid fa-check"></i> Apply</button>
-                        <button class="${BTN} wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
+                    ${presets.length ? `<div class="wt-clock-line"><label></label><span class="wt-clock-fields wt-clock-presets">${presets.map((p, i) =>
+                        `<button class="${BTN} wt-preset" data-i="${i}">${esc(p.name)}</button>`).join('')}</span></div>` : ''}
+                    <div class="wt-clock-line"><label></label>
+                        <span class="wt-clock-fields wt-clock-actions">
+                            <button class="${BTN} wt-edit-ok"><i class="fa-solid fa-check"></i> Apply</button>
+                            <button class="${BTN} wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
+                        </span>
                     </div>
                 </div>
             `);

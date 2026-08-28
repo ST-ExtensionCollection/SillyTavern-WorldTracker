@@ -5,7 +5,10 @@ import { loadSettings, MODULE_NAME } from './src/settings.js';
 import * as state from './src/state.js';
 import * as clockUtil from './src/clock.js';
 import { log } from './src/log.js';
-import { initPanel, renderPanel, destroyPanel, replaceBanner } from './src/ui/panel.js';
+import { buildTrackerPrompt } from './src/prompt.js';
+import { parseTrackerResponse } from './src/parse.js';
+import { runTrackerRequest, listProfiles } from './src/request.js';
+import { initPanel, renderPanel, destroyPanel, replaceBanner, setBusy } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
 const {
@@ -80,10 +83,43 @@ function onModeChange(mode) {
     refresh();
 }
 
-function onManualUpdate() {
-    // Wired in milestone 4 (request + parse).
-    log('manual update requested (not wired yet)');
-    toastr.info('WorldTracker: manual update not wired yet.');
+let updateInFlight = null;
+
+async function onManualUpdate() {
+    const st = getState();
+    if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
+    if (updateInFlight) { updateInFlight.abort(); }
+
+    const c = SillyTavern.getContext();
+    const n = Math.max(1, Number(settings.includeLastXMessages) || 6);
+    const recent = (c.chat || []).slice(-n).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
+    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1 });
+
+    const controller = new AbortController();
+    updateInFlight = controller;
+    setBusy(true);
+    log(`tracker request: ${recent.length} msg(s), ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
+
+    try {
+        const text = await runTrackerRequest(messages, settings, c, controller.signal);
+        if (controller.signal.aborted) return;
+        log('tracker response (first 500):', String(text || '').slice(0, 500));
+        const res = parseTrackerResponse(text);
+        if (res.ok) {
+            log('parsed tracker data:', res.data);
+            toastr.success('WorldTracker: parsed OK — merge/approval is the next milestone.');
+        } else {
+            log('parse FAILED. data:', res.data, 'raw:', res.raw);
+            toastr.warning('WorldTracker: could not parse tracker response (see console).');
+        }
+    } catch (err) {
+        if (controller.signal.aborted) { log('request aborted'); return; }
+        log('request error:', err);
+        toastr.error(`WorldTracker request failed: ${err?.message || err}`);
+    } finally {
+        if (updateInFlight === controller) updateInFlight = null;
+        setBusy(false);
+    }
 }
 
 function onSetUpdater(name, updater) {
@@ -164,6 +200,11 @@ function buildSettingsDrawer() {
                     <span>Show lock icons</span>
                 </label>
                 <div class="wt-setting-row">
+                    <label for="wt-profile">Connection profile</label>
+                    <select id="wt-profile" class="text_pole"></select>
+                    <small class="notes">Which connection the tracker query uses. "Main API (fallback)" reuses the chat's model via generateRaw.</small>
+                </div>
+                <div class="wt-setting-row">
                     <label for="wt-auto-mode">Auto-update</label>
                     <select id="wt-auto-mode" class="text_pole">
                         <option value="off">Off (manual only)</option>
@@ -171,12 +212,16 @@ function buildSettingsDrawer() {
                         <option value="user">After my messages</option>
                         <option value="both">After every message</option>
                     </select>
+                    <small class="notes">Auto-update fires in a later milestone; setting is stored now.</small>
+                </div>
+                <div class="wt-setting-row">
+                    <label for="wt-ctx-msgs">Messages of context</label>
+                    <input type="number" id="wt-ctx-msgs" class="text_pole" min="1" max="40">
                 </div>
                 <label class="checkbox_label">
                     <input type="checkbox" id="wt-auto-approve">
                     <span>Auto-approve all changes (skip review)</span>
                 </label>
-                <small class="notes">Connection profile, prompt overrides and per-field options land in the panel's settings button (coming soon).</small>
             </div>
         </div>`;
     $('#extensions_settings2').append(html);
@@ -185,6 +230,22 @@ function buildSettingsDrawer() {
     const $locks = $('#wt-show-locks').prop('checked', settings.showLockIcons !== false);
     const $auto = $('#wt-auto-mode').val(settings.autoMode || 'ai');
     const $approve = $('#wt-auto-approve').prop('checked', !!settings.autoApprove);
+    const $ctxMsgs = $('#wt-ctx-msgs').val(Number(settings.includeLastXMessages) || 6);
+
+    const $profile = $('#wt-profile');
+    function fillProfiles() {
+        const profiles = listProfiles(ctx);
+        $profile.empty().append('<option value="">Main API (fallback)</option>');
+        for (const p of profiles) $profile.append(`<option value="${p.id}">${$('<div>').text(p.name).html()}</option>`);
+        $profile.val(settings.profileId || '');
+    }
+    fillProfiles();
+    $profile.on('change', function () { settings.profileId = this.value; saveSettingsDebounced(); log('profile ->', this.value || '(main API)'); });
+    $ctxMsgs.on('change', function () {
+        settings.includeLastXMessages = Math.max(1, Math.min(40, Number(this.value) || 6));
+        this.value = settings.includeLastXMessages;
+        saveSettingsDebounced();
+    });
 
     $enabled.on('change', function () {
         settings.enabled = this.checked;

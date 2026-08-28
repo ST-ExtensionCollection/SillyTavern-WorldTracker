@@ -20,6 +20,13 @@ export function initPanel(config) {
     cfg = config;
 }
 
+/** Toggle the "updating" spinner on the refresh button. */
+export function setBusy(busy) {
+    const $btn = $('.wt-update');
+    $btn.toggleClass('wt-spin', !!busy);
+    $btn.prop('disabled', !!busy);
+}
+
 export function destroyPanel() {
     $(`#${ROOT_ID}`).remove();
     $(`#${BAR_ID}`).remove();

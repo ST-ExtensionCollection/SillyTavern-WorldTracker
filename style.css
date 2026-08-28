@@ -173,6 +173,14 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-accent);
 }
 
+.wt-btn.wt-spin i {
+    animation: wt-spin 0.9s linear infinite;
+}
+
+@keyframes wt-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* ---------------- Detail sheet ---------------- */
 
 /* Fixed element on <body>, JS-positioned under the strip (see positionSheet).
@@ -295,13 +303,25 @@ body:has(#wt-inline) #extensionTopBar {
 .wt-clock-line {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.5rem;
 }
 
 .wt-clock-line > label {
-    flex: 0 0 5rem;
+    flex: 0 0 6rem;
+    text-align: right;
     opacity: 0.8;
     font-size: 0.85em;
+    line-height: 1.1;
+}
+
+/* Every line's controls start at the same x, right after the label column. */
+.wt-clock-fields {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
 }
 
 /* Kill .text_pole's width:100% / margin so the fields sit inline and compact. */
@@ -309,22 +329,17 @@ body:has(#wt-inline) #extensionTopBar {
     margin: 0;
 }
 
-.wt-clock-line input[type="number"] {
+.wt-clock-fields input[type="number"] {
     flex: 0 0 2.8rem;
     width: 2.8rem;
     text-align: center;
 }
 
-.wt-clock-line .wt-clock-abs {
+.wt-clock-fields .wt-clock-abs {
     flex: 1 1 auto;
     width: auto;
     min-width: 13rem;
     max-width: 22rem;
-}
-
-.wt-clock-presets {
-    flex-wrap: wrap;
-    padding-left: 5.3rem;
 }
 
 .wt-clock-presets .wt-preset {
@@ -333,7 +348,8 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-clock-actions {
-    justify-content: flex-end;
+    justify-content: flex-start;
+    gap: 0.4rem;
 }
 
 /* ---------------- Characters ---------------- */

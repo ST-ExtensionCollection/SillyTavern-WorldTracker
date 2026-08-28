@@ -48,6 +48,7 @@ function seedFromSchema(schema) {
             iso: s.clock?.startIso ?? '2024-06-01T09:00:00',
             displayFormat: s.clock?.displayFormat ?? 'HH:mm — EEE, MMM d yyyy',
             locked: !!s.clock?.lockedByDefault,
+            expectedInterval: { ...(s.clock?.expectedInterval ?? { days: 0, hours: 0, minutes: 10 }) },
         },
         world: {},
         userStats: {},
@@ -79,6 +80,9 @@ function seedFromSchema(schema) {
 function reconcile(state, schema) {
     const s = schema ?? defaultSchema();
     if (!state.clock) state.clock = seedFromSchema(s).clock;
+    if (!state.clock.expectedInterval) {
+        state.clock.expectedInterval = { ...(s.clock?.expectedInterval ?? { days: 0, hours: 0, minutes: 10 }) };
+    }
     if (!state.world) state.world = {};
     if (!state.userStats) state.userStats = {};
     if (!state.characters) state.characters = {};

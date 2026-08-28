@@ -215,6 +215,7 @@ body:has(#wt-inline) #extensionTopBar {
 .wt-field-row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.2rem 0.15rem;
     border-bottom: 1px dashed var(--wt-border);
@@ -248,9 +249,7 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-accent);
 }
 
-.wt-lock-btn,
-.wt-edit-ok,
-.wt-edit-cancel {
+.wt-lock-btn {
     background: transparent;
     border: 1px solid var(--wt-border);
     color: var(--wt-fg);
@@ -265,20 +264,58 @@ body:has(#wt-inline) #extensionTopBar {
     border-color: var(--wt-accent);
 }
 
+/* Editors: rely on ST's .text_pole / .menu_button for theming; we only size. */
 .wt-field-editor {
     display: inline-flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
     align-items: center;
-    flex: 1;
+    flex: 1 1 100%;
 }
 
 .wt-field-editor .wt-edit-input {
     flex: 1;
-    background: var(--wt-bg);
-    color: var(--wt-fg);
-    border: 1px solid var(--wt-border);
-    border-radius: 4px;
-    padding: 0.15rem 0.35rem;
+    min-width: 6rem;
+}
+
+.wt-field-editor .wt-btn-sm {
+    padding: 0.15rem 0.5rem;
+    flex: 0 0 auto;
+}
+
+/* Clock editor: labelled rows */
+.wt-clock-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.3rem 0;
+}
+
+.wt-clock-line {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.wt-clock-line > label {
+    min-width: 6rem;
+    opacity: 0.8;
+    font-size: 0.85em;
+}
+
+.wt-clock-line .wt-clock-abs {
+    flex: 1;
+    min-width: 10rem;
+}
+
+.wt-clock-line input[type="number"] {
+    width: 3.2rem;
+    text-align: center;
+}
+
+.wt-clock-actions {
+    justify-content: flex-end;
 }
 
 /* ---------------- Characters ---------------- */

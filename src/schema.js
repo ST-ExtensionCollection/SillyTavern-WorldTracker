@@ -28,6 +28,9 @@ export function defaultSchema() {
             startIso: '2024-06-01T09:00:00',
             displayFormat: 'HH:mm — EEE, MMM d yyyy',
             lockedByDefault: false,
+            // How much in-world time you expect the next reply to cover. Used as
+            // the fallback elapsed when you reject the model's reported elapsed.
+            expectedInterval: { days: 0, hours: 0, minutes: 10 },
         },
 
         // Scene-level fields shown in the banner and detail sheet.

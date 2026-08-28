@@ -30,7 +30,36 @@ export function destroyPanel() {
         window.removeEventListener('scroll', sheetReposHandler, true);
         sheetReposHandler = null;
     }
+    unpadChat();
     $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right');
+}
+
+/**
+ * When the banner overlaps the top of #chat (TopInfoBar is a fixed pill in
+ * many themes), add matching top padding to #chat — the scroll container — so
+ * even a single message can be scrolled clear of the bar.
+ */
+function padChatForBar() {
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) return;
+    unpadChat();
+    const tib = document.getElementById('extensionTopBar');
+    const barEl = (tib && document.getElementById(INLINE_ID)) ? tib : stripAnchorEl();
+    if (!barEl) return;
+    const overlap = barEl.getBoundingClientRect().bottom - chatEl.getBoundingClientRect().top;
+    if (overlap > 2) {
+        const base = parseFloat(getComputedStyle(chatEl).paddingTop) || 0;
+        chatEl.style.paddingTop = `${Math.round(base + overlap + 10)}px`;
+        chatEl.dataset.wtPadded = '1';
+    }
+}
+
+function unpadChat() {
+    const chatEl = document.getElementById('chat');
+    if (chatEl && chatEl.dataset.wtPadded) {
+        chatEl.style.paddingTop = '';
+        delete chatEl.dataset.wtPadded;
+    }
 }
 
 /** True when a character/group chat is open. Nothing to track otherwise. */
@@ -270,11 +299,16 @@ function renderBanner() {
     if (expanded) {
         const $sheet = $(`<div id="${SHEET_ID}" class="wt-sheet"></div>`).append(buildDetailBody());
         $('body').append($sheet);
-        positionSheet();
-        sheetReposHandler = () => positionSheet();
-        window.addEventListener('resize', sheetReposHandler);
-        window.addEventListener('scroll', sheetReposHandler, true);
     }
+
+    const reflow = () => { padChatForBar(); positionSheet(); };
+    sheetReposHandler = reflow;
+    window.addEventListener('resize', sheetReposHandler);
+    window.addEventListener('scroll', sheetReposHandler, true);
+    // Measure now, then again after TopInfoBar's height transition settles.
+    requestAnimationFrame(reflow);
+    setTimeout(reflow, 250);
+    setTimeout(reflow, 900);
 }
 
 /** Re-run banner placement (e.g. if TopInfoBar mounted after us). */

@@ -39,9 +39,19 @@ function refresh() {
 function onEdit(path, val) {
     const st = getState();
     if (!st) return;
-    if (path === 'clock' && val && typeof val === 'object' && val.__elapsed) {
-        const newIso = clockUtil.addElapsed(st.clock.iso, val.__elapsed);
-        st.clock.iso = newIso;
+    if (path === 'clock' && val && typeof val === 'object') {
+        if (val.__expected) {
+            st.clock.expectedInterval = {
+                days: Math.max(0, Number(val.__expected.days) || 0),
+                hours: Math.max(0, Number(val.__expected.hours) || 0),
+                minutes: Math.max(0, Number(val.__expected.minutes) || 0),
+            };
+        }
+        if (val.__elapsed) {
+            st.clock.iso = clockUtil.addElapsed(st.clock.iso, val.__elapsed);
+        } else if (val.__setIso) {
+            st.clock.iso = clockUtil.toIso(val.__setIso);
+        }
         state.save();
         refresh();
         return;
@@ -121,9 +131,14 @@ function onDeclineAll() {
 }
 
 function onOpenSettings() {
-    // Full settings modal comes later; for now jump to the drawer.
-    const $drawer = $('#wt-settings-drawer .inline-drawer-toggle');
-    if ($drawer.length) $drawer[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Full in-panel settings modal comes later. For now, open the Extensions
+    // tab and expand our drawer.
+    const $wand = $('#extensions-settings-button, #sys-settings-button').first();
+    const $drawerContent = $('#wt-settings-drawer .inline-drawer-content');
+    const $toggle = $('#wt-settings-drawer .inline-drawer-toggle');
+    if ($drawerContent.length && !$drawerContent.is(':visible')) $toggle.trigger('click');
+    if ($toggle.length) $toggle[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else toastr.info('WorldTracker settings live in the Extensions tab for now.');
 }
 
 // ---------------------------------------------------------------------------

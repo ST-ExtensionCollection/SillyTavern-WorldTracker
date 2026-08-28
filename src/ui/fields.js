@@ -2,16 +2,19 @@
 //
 // Renders: [icon] label ......... [value / inline editor] [lock toggle]
 // Emits via handlers: onEdit(path, newValue), onToggleLock(path, locked)
+//
+// For the clock, onEdit's second arg is an object with any of:
+//   { __setIso: 'YYYY-MM-DDTHH:mm' }   set the clock absolutely
+//   { __elapsed: {days,hours,minutes} } advance the clock
+//   { __expected: {days,hours,minutes} } save the "expected next reply" interval
 
 import { displayValue, esc, iconFor } from './format.js';
+import { toIso } from '../clock.js';
 
-/**
- * @param {string} path        canonical field path
- * @param {object} field       the field object from state ({value,type,locked,...})
- * @param {object} state       full state (needed for clock formatting)
- * @param {object} opts        { showLock, label, onEdit, onToggleLock, extraControlHtml }
- * @returns {JQuery}
- */
+// ST-native classes so inputs/buttons pick up the active theme.
+const INP = 'text_pole wt-inp';
+const BTN = 'menu_button wt-btn-sm';
+
 export function fieldRow(path, field, state, opts = {}) {
     const { showLock = true, label, onEdit, onToggleLock, extraControlHtml = '' } = opts;
     const isClock = path === 'clock';
@@ -31,33 +34,55 @@ export function fieldRow(path, field, state, opts = {}) {
     function beginEdit() {
         if ($row.find('.wt-field-editor').length) return;
         let $editor;
+
         if (isClock) {
-            // Clock is edited by nudging elapsed time, not typed absolute.
+            const cur16 = toIso(state.clock.iso).slice(0, 16); // YYYY-MM-DDTHH:mm
+            const exp = state.clock.expectedInterval || { days: 0, hours: 0, minutes: 0 };
             $editor = $(`
-                <span class="wt-field-editor wt-clock-editor">
-                    <input type="number" class="wt-clock-d" min="0" placeholder="d" style="width:3em">
-                    <input type="number" class="wt-clock-h" min="0" placeholder="h" style="width:3em">
-                    <input type="number" class="wt-clock-m" min="0" placeholder="m" style="width:3em">
-                    <button class="wt-edit-ok" title="Add time"><i class="fa-solid fa-check"></i></button>
-                    <button class="wt-edit-cancel" title="Cancel"><i class="fa-solid fa-xmark"></i></button>
-                </span>
+                <div class="wt-field-editor wt-clock-editor">
+                    <div class="wt-clock-line">
+                        <label>Set</label>
+                        <input type="datetime-local" class="${INP} wt-clock-abs" value="${esc(cur16)}" step="60">
+                    </div>
+                    <div class="wt-clock-line">
+                        <label>Advance</label>
+                        <input type="number" class="${INP} wt-clock-d" min="0" placeholder="d">
+                        <input type="number" class="${INP} wt-clock-h" min="0" placeholder="h">
+                        <input type="number" class="${INP} wt-clock-m" min="0" placeholder="m">
+                    </div>
+                    <div class="wt-clock-line">
+                        <label title="Fallback time to add if you reject the model's reported elapsed">Expected next</label>
+                        <input type="number" class="${INP} wt-exp-d" min="0" placeholder="d" value="${exp.days || ''}">
+                        <input type="number" class="${INP} wt-exp-h" min="0" placeholder="h" value="${exp.hours || ''}">
+                        <input type="number" class="${INP} wt-exp-m" min="0" placeholder="m" value="${exp.minutes || ''}">
+                    </div>
+                    <div class="wt-clock-line wt-clock-actions">
+                        <button class="${BTN} wt-edit-ok"><i class="fa-solid fa-check"></i> Apply</button>
+                        <button class="${BTN} wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
             `);
             $value.hide().after($editor);
-            $editor.find('.wt-clock-d').trigger('focus');
+            $editor.find('.wt-clock-abs').trigger('focus');
             $editor.find('.wt-edit-ok').on('click', () => {
-                const delta = {
-                    days: Number($editor.find('.wt-clock-d').val()) || 0,
-                    hours: Number($editor.find('.wt-clock-h').val()) || 0,
-                    minutes: Number($editor.find('.wt-clock-m').val()) || 0,
-                };
-                onEdit && onEdit(path, { __elapsed: delta });
+                const num = (sel) => Number($editor.find(sel).val()) || 0;
+                const expected = { days: num('.wt-exp-d'), hours: num('.wt-exp-h'), minutes: num('.wt-exp-m') };
+                onEdit && onEdit(path, { __expected: expected });
+
+                const advance = { days: num('.wt-clock-d'), hours: num('.wt-clock-h'), minutes: num('.wt-clock-m') };
+                const abs = String($editor.find('.wt-clock-abs').val() || '');
+                if (advance.days || advance.hours || advance.minutes) {
+                    onEdit && onEdit(path, { __elapsed: advance });
+                } else if (abs && abs.slice(0, 16) !== toIso(state.clock.iso).slice(0, 16)) {
+                    onEdit && onEdit(path, { __setIso: abs });
+                }
                 endEdit();
             });
         } else if (field && field.type === 'enum' && Array.isArray(field.options)) {
             $editor = $(`<span class="wt-field-editor">
-                <select class="wt-edit-input">${field.options.map((o) => `<option${o === field.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>
-                <button class="wt-edit-ok"><i class="fa-solid fa-check"></i></button>
-                <button class="wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
+                <select class="${INP} wt-edit-input">${field.options.map((o) => `<option${o === field.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>
+                <button class="${BTN} wt-edit-ok"><i class="fa-solid fa-check"></i></button>
+                <button class="${BTN} wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
             </span>`);
             $value.hide().after($editor);
             $editor.find('.wt-edit-input').trigger('focus');
@@ -65,9 +90,9 @@ export function fieldRow(path, field, state, opts = {}) {
         } else {
             const inputType = field && field.type === 'number' ? 'number' : 'text';
             $editor = $(`<span class="wt-field-editor">
-                <input type="${inputType}" class="wt-edit-input" value="${esc(field ? field.value : '')}">
-                <button class="wt-edit-ok"><i class="fa-solid fa-check"></i></button>
-                <button class="wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
+                <input type="${inputType}" class="${INP} wt-edit-input" value="${esc(field ? field.value : '')}">
+                <button class="${BTN} wt-edit-ok"><i class="fa-solid fa-check"></i></button>
+                <button class="${BTN} wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
             </span>`);
             $value.hide().after($editor);
             const $inp = $editor.find('.wt-edit-input');

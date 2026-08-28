@@ -295,28 +295,36 @@ body:has(#wt-inline) #extensionTopBar {
 .wt-clock-line {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: 0.3rem;
 }
 
 .wt-clock-line > label {
-    flex: 0 0 6rem;
+    flex: 0 0 5rem;
     opacity: 0.8;
     font-size: 0.85em;
 }
 
-.wt-clock-line .wt-clock-abs {
-    flex: 1;
-    min-width: 9rem;
+/* Kill .text_pole's width:100% / margin so the fields sit inline and compact. */
+.wt-clock-editor .text_pole {
+    margin: 0;
 }
 
 .wt-clock-line input[type="number"] {
-    width: 3rem;
+    flex: 0 0 2.8rem;
+    width: 2.8rem;
     text-align: center;
 }
 
+.wt-clock-line .wt-clock-abs {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 13rem;
+    max-width: 22rem;
+}
+
 .wt-clock-presets {
-    padding-left: 6.3rem;
+    flex-wrap: wrap;
+    padding-left: 5.3rem;
 }
 
 .wt-clock-presets .wt-preset {

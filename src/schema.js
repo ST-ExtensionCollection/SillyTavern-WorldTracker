@@ -33,11 +33,12 @@ export function defaultSchema() {
             // Back-and-forth dialogue is usually seconds, so keep this small.
             expectedInterval: { days: 0, hours: 0, minutes: 1, seconds: 0 },
             // One-click pace presets that fill the expected-interval fields.
+            // Ordered shortest -> longest.
             intervalPresets: [
-                { name: 'Conversational', days: 0, hours: 0, minutes: 0, seconds: 30 },
                 { name: 'Fighting', days: 0, hours: 0, minutes: 0, seconds: 6 },
-                { name: 'Classes', days: 0, hours: 0, minutes: 45, seconds: 0 },
+                { name: 'Conversational', days: 0, hours: 0, minutes: 0, seconds: 30 },
                 { name: 'Narration', days: 0, hours: 0, minutes: 10, seconds: 0 },
+                { name: 'Classes', days: 0, hours: 0, minutes: 45, seconds: 0 },
             ],
         },
 

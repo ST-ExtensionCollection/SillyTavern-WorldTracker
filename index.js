@@ -1,22 +1,19 @@
 // WorldTracker — separate-request world-state tracker with field locking and an
 // approve/decline gate. Entry point.
 
-import { extension_settings, saveMetadataDebounced } from '../../../extensions.js';
 import { loadSettings, MODULE_NAME } from './src/settings.js';
 import * as state from './src/state.js';
 import * as clockUtil from './src/clock.js';
+import { log } from './src/log.js';
 import { initPanel, renderPanel, destroyPanel, replaceBanner } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
 const {
     eventSource,
     event_types,
+    extensionSettings,
     saveSettingsDebounced,
 } = ctx;
-
-// Ensure state.js has a reliable metadata-save fn even if the context object
-// doesn't forward one.
-if (typeof ctx.saveMetadataDebounced !== 'function') ctx.saveMetadataDebounced = saveMetadataDebounced;
 
 let settings = null;
 
@@ -54,10 +51,12 @@ function onEdit(path, val) {
             st.clock.iso = clockUtil.toIso(val.__setIso);
         }
         state.save();
+        log(`clock ->`, st.clock.iso, val.__expected ? `(expected ${JSON.stringify(st.clock.expectedInterval)})` : '');
         refresh();
         return;
     }
     state.applyValue(st, path, val, null);
+    log(`edit ${path} ->`, val);
     refresh();
 }
 
@@ -65,6 +64,7 @@ function onToggleLock(path, locked) {
     const st = getState();
     if (!st) return;
     state.setLock(st, path, locked);
+    log(`${locked ? 'lock' : 'unlock'} ${path}`);
     refresh();
 }
 
@@ -82,6 +82,7 @@ function onModeChange(mode) {
 
 function onManualUpdate() {
     // Wired in milestone 4 (request + parse).
+    log('manual update requested (not wired yet)');
     toastr.info('WorldTracker: manual update not wired yet.');
 }
 
@@ -220,6 +221,7 @@ function registerSlashCommands() {
             if (!st || !name) return '';
             if (op === 'add') state.ensureCharacter(st, name, settings.schema);
             else if (op === 'remove') state.removeCharacter(st, name);
+            log(`/wt-char ${op} ${name} -> now tracking ${Object.keys(st.characters).length}`);
             refresh();
             return '';
         },
@@ -240,8 +242,8 @@ function registerSlashCommands() {
 // ---------------------------------------------------------------------------
 
 jQuery(async () => {
-    settings = loadSettings(extension_settings);
-    state.init(ctx);
+    settings = loadSettings(extensionSettings);
+    state.init();
 
     initPanel({ context: ctx, settings, getState, handlers: {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
@@ -253,6 +255,9 @@ jQuery(async () => {
     registerSlashCommands();
 
     eventSource.on(event_types.CHAT_CHANGED, () => {
+        let id;
+        try { id = ctx.getCurrentChatId?.(); } catch { /* ignore */ }
+        log(`chat changed -> ${id ?? '(none)'}`);
         state.get(settings.schema); // seed/reconcile for the new chat
         refresh();
     });
@@ -263,5 +268,5 @@ jQuery(async () => {
     setTimeout(() => replaceBanner(), 1500);
 
     refresh();
-    console.log(`[${MODULE_NAME}] loaded`);
+    log('loaded');
 });

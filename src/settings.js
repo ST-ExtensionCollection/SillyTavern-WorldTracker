@@ -54,7 +54,10 @@ export function loadSettings(extension_settings) {
     for (const k of Object.keys(defaults)) {
         if (!(k in existing)) existing[k] = defaults[k];
     }
-    if (!existing.schema || typeof existing.schema !== 'object') existing.schema = defaultSchema();
+    // No schema editor exists yet, so the schema is not user-owned — always
+    // refresh it from code so new fields / presets land. (When a schema editor
+    // ships, switch this to a deep merge that preserves user edits.)
+    existing.schema = defaultSchema();
     existing.formatVersion = FORMAT_VERSION;
     return existing;
 }

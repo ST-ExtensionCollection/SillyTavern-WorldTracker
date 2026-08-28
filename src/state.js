@@ -19,24 +19,34 @@
 //   }
 
 import { defaultSchema, UPDATER_NARRATOR } from './schema.js';
+import { log, warn } from './log.js';
 
 export const META_KEY = 'WorldTracker';
 const STATE_VERSION = 1;
 
-let ctx = null; // SillyTavern context, injected by init()
-
-export function init(context) {
-    ctx = context;
+export function init() {
+    // No caching — chat_metadata is REASSIGNED by ST on every chat change, so
+    // anything captured at boot goes stale. Always read it live.
 }
 
+/** The current chat's metadata object (live — reassigned by ST per chat). */
 function meta() {
-    return ctx.chatMetadata ?? ctx.chat_metadata ?? {};
+    try {
+        return globalThis.SillyTavern.getContext().chatMetadata ?? null;
+    } catch (e) {
+        warn('no context for chat metadata', e);
+        return null;
+    }
 }
 
 export function save() {
-    // saveMetadataDebounced persists chat_metadata to the chat file.
-    if (typeof ctx.saveMetadataDebounced === 'function') ctx.saveMetadataDebounced();
-    else if (typeof ctx.saveMetadata === 'function') ctx.saveMetadata();
+    try {
+        const c = globalThis.SillyTavern.getContext();
+        if (typeof c.saveMetadataDebounced === 'function') c.saveMetadataDebounced();
+        else if (typeof c.saveMetadata === 'function') c.saveMetadata();
+    } catch (e) {
+        warn('save failed', e);
+    }
 }
 
 /** Build a fresh state object from a schema. */
@@ -115,6 +125,7 @@ export function get(schema) {
     if (!m[META_KEY] || typeof m[META_KEY] !== 'object') {
         m[META_KEY] = seedFromSchema(schema);
         save();
+        log(`seeded fresh state for chat (chars: 0)`);
     } else {
         reconcile(m[META_KEY], schema);
     }

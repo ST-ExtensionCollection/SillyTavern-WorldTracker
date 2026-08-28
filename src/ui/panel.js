@@ -6,7 +6,7 @@
 
 import { fieldRow } from './fields.js';
 import { displayValue, esc, iconFor } from './format.js';
-import * as clock from '../clock.js';
+import { log } from '../log.js';
 
 const ROOT_ID = 'wt-root';
 const BAR_ID = 'wt-bar';
@@ -14,7 +14,7 @@ const INLINE_ID = 'wt-inline';
 const SHEET_ID = 'wt-sheet';
 
 let cfg = null; // { context, settings, getState, handlers }
-let sheetReposHandler = null;
+let resizeHandler = null;
 
 export function initPanel(config) {
     cfg = config;
@@ -25,41 +25,46 @@ export function destroyPanel() {
     $(`#${BAR_ID}`).remove();
     $(`#${INLINE_ID}`).remove();
     $(`#${SHEET_ID}`).remove();
-    if (sheetReposHandler) {
-        window.removeEventListener('resize', sheetReposHandler);
-        window.removeEventListener('scroll', sheetReposHandler, true);
-        sheetReposHandler = null;
+    if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+        resizeHandler = null;
     }
     unpadChat();
     $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right');
 }
 
+const SPACER_ID = 'wt-chat-spacer';
+
 /**
  * When the banner overlaps the top of #chat (TopInfoBar is a fixed pill in
- * many themes), add matching top padding to #chat — the scroll container — so
- * even a single message can be scrolled clear of the bar.
+ * many themes), insert a spacer as the FIRST child of #chat so a lone first
+ * message can be scrolled clear of the bar. A spacer div (vs. padding on
+ * #chat) leaves #chat's own box model untouched, so ST's scroll-to-bottom
+ * anchoring doesn't fight it.
  */
 function padChatForBar() {
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
-    unpadChat();
     const tib = document.getElementById('extensionTopBar');
     const barEl = (tib && document.getElementById(INLINE_ID)) ? tib : stripAnchorEl();
-    if (!barEl) return;
+    if (!barEl) { unpadChat(); return; }
     const overlap = barEl.getBoundingClientRect().bottom - chatEl.getBoundingClientRect().top;
+    let spacer = document.getElementById(SPACER_ID);
     if (overlap > 2) {
-        const base = parseFloat(getComputedStyle(chatEl).paddingTop) || 0;
-        chatEl.style.paddingTop = `${Math.round(base + overlap + 10)}px`;
-        chatEl.dataset.wtPadded = '1';
+        if (!spacer) {
+            spacer = document.createElement('div');
+            spacer.id = SPACER_ID;
+            spacer.setAttribute('aria-hidden', 'true');
+        }
+        spacer.style.cssText = `flex:0 0 auto;height:${Math.round(overlap + 10)}px;pointer-events:none;`;
+        if (chatEl.firstElementChild !== spacer) chatEl.insertBefore(spacer, chatEl.firstChild);
+    } else if (spacer) {
+        spacer.remove();
     }
 }
 
 function unpadChat() {
-    const chatEl = document.getElementById('chat');
-    if (chatEl && chatEl.dataset.wtPadded) {
-        chatEl.style.paddingTop = '';
-        delete chatEl.dataset.wtPadded;
-    }
+    document.getElementById(SPACER_ID)?.remove();
 }
 
 /** True when a character/group chat is open. Nothing to track otherwise. */
@@ -301,14 +306,22 @@ function renderBanner() {
         $('body').append($sheet);
     }
 
+    // Re-add / size the chat spacer synchronously so there's no frame where it
+    // vanished (destroyPanel removed it) — that gap would jump the scroll.
+    padChatForBar();
+
+    // Re-measure on resize only. NOT on scroll: the bar is inside a fixed
+    // TopInfoBar so its rect never moves with scroll, and re-padding #chat on
+    // every scroll frame fought the chat's own scrolling (bounce-back).
     const reflow = () => { padChatForBar(); positionSheet(); };
-    sheetReposHandler = reflow;
-    window.addEventListener('resize', sheetReposHandler);
-    window.addEventListener('scroll', sheetReposHandler, true);
+    resizeHandler = reflow;
+    window.addEventListener('resize', resizeHandler);
     // Measure now, then again after TopInfoBar's height transition settles.
     requestAnimationFrame(reflow);
     setTimeout(reflow, 250);
     setTimeout(reflow, 900);
+
+    log(`banner rendered (${anchor ? anchor.mode : 'fixed-fallback'}), ${Object.keys(state.characters).length} character(s), ${pendingCount} pending`);
 }
 
 /** Re-run banner placement (e.g. if TopInfoBar mounted after us). */

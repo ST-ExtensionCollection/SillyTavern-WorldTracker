@@ -105,7 +105,7 @@ function stopUpdate(who) {
     if (who === 'user') toastr.info('WorldTracker: update cancelled.');
 }
 
-async function onManualUpdate() {
+async function onManualUpdate(opts = {}) {
     const st = getState();
     if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
 
@@ -116,8 +116,14 @@ async function onManualUpdate() {
 
     const c = SillyTavern.getContext();
     const n = Math.max(1, Number(settings.includeLastXMessages) || 6);
-    const recent = (c.chat || []).slice(-n).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
-    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1 });
+    const chat = c.chat || [];
+    const srcId = Number.isInteger(opts.sourceMessageId)
+        ? opts.sourceMessageId
+        : Math.max(0, chat.length - 1);
+    const srcMsg = chat[srcId];
+    const authorName = srcMsg && !srcMsg.is_user ? srcMsg.name : null;
+    const recent = chat.slice(-n).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
+    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName });
 
     const job = { controller: new AbortController(), superseded: false };
     updateJob = job;
@@ -135,8 +141,7 @@ async function onManualUpdate() {
             return;
         }
         log('parsed tracker data:', res.data);
-        const srcId = Math.max(0, (c.chat?.length ?? 1) - 1);
-        ingestProposals(st, diffToProposals(st, res.data, { sourceMessageId: srcId }));
+        ingestProposals(st, diffToProposals(st, res.data, { sourceMessageId: srcId, authorName }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
         log('request error:', err);
@@ -452,7 +457,7 @@ jQuery(async () => {
     // --- auto-update after messages ---
     let genActive = false;
     let autoTimer = null;
-    const autoUpdate = (why) => {
+    const autoUpdate = (why, sourceMessageId) => {
         clearTimeout(autoTimer);
         autoTimer = setTimeout(() => {
             if (!settings.enabled || genActive || updateJob) {
@@ -461,7 +466,7 @@ jQuery(async () => {
             }
             if (!getState()) return;
             log(`auto-update firing (${why})`);
-            onManualUpdate();
+            onManualUpdate(Number.isInteger(sourceMessageId) ? { sourceMessageId } : {});
         }, Math.max(200, Number(settings.debounceMs) || 1200));
     };
     // Ignore dry-run generations (prompt itemization fires GENERATION_STARTED
@@ -470,11 +475,10 @@ jQuery(async () => {
     eventSource.on(event_types.GENERATION_ENDED, () => { genActive = false; });
     eventSource.on(event_types.GENERATION_STOPPED, () => { genActive = false; });
     eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => {
-        log(`CHARACTER_MESSAGE_RENDERED id=${id} autoMode=${settings.autoMode}`);
-        if (['ai', 'both'].includes(settings.autoMode)) autoUpdate('ai message');
+        if (['ai', 'both'].includes(settings.autoMode)) autoUpdate('ai message', id);
     });
     eventSource.on(event_types.USER_MESSAGE_RENDERED, (id) => {
-        if (['user', 'both'].includes(settings.autoMode)) autoUpdate('user message');
+        if (['user', 'both'].includes(settings.autoMode)) autoUpdate('user message', id);
     });
 
     // The chat layout (#sheld) and sibling extensions like TopInfoBar may not be

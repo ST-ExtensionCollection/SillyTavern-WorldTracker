@@ -78,13 +78,26 @@ function constraintNotes(state) {
 }
 
 /**
+ * A character is "in scope" this turn if its updater is the narrator, or if it
+ * is 'self' and it authored the triggering message, or a specific name that
+ * authored it. Others are read-only for this update.
+ */
+export function inScope(entry, name, authorName) {
+    const u = entry?.updater || 'narrator';
+    if (u === 'narrator') return true;
+    if (!authorName) return false;
+    if (u === 'self') return authorName === name;
+    return authorName === u;
+}
+
+/**
  * @param {object} state    canonical world state
  * @param {Array}  recent   [{ name, is_user, mes }] recent chat messages, oldest first
- * @param {object} opts     { settings, playerName }
+ * @param {object} opts     { settings, playerName, authorName }
  * @returns {{ messages: {role:string, content:string}[] }}
  */
 export function buildTrackerPrompt(state, recent, opts = {}) {
-    const { settings = {}, playerName } = opts;
+    const { settings = {}, playerName, authorName } = opts;
     const sys = settings.promptOverrides?.system || DEFAULT_SYSTEM;
     const cap = Number(settings.maxMessageChars) || 1500;
     const L = [];
@@ -103,8 +116,12 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
 
     const names = Object.keys(state.characters);
     if (names.length) {
+        const writable = names.filter((n) => inScope(state.characters[n], n, authorName));
+        const readonly = names.filter((n) => !writable.includes(n));
         L.push('');
-        L.push(`Only report these NPCs: ${names.join(', ')}${playerName ? `. Never report the player (${playerName}).` : '.'}`);
+        if (writable.length) L.push(`Report updates for these NPCs only: ${writable.join(', ')}.`);
+        if (readonly.length) L.push(`Do NOT report or change these NPCs this turn (not their turn to update): ${readonly.join(', ')}.`);
+        if (playerName) L.push(`Never report the player (${playerName}).`);
     }
 
     if (settings.promptOverrides?.instruction) {

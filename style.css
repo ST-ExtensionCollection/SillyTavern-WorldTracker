@@ -400,13 +400,63 @@ body:has(#wt-inline) #extensionTopBar {
     opacity: 1;
 }
 
-/* ---------------- Review queue ---------------- */
+/* ---------------- Review queue + inline card ---------------- */
 
 .wt-review {
     border: 1px solid var(--wt-accent);
     border-radius: 6px;
     padding: 0.4rem 0.5rem;
     background: color-mix(in srgb, var(--wt-accent) 8%, transparent);
+}
+
+.wt-card {
+    margin: 0.4rem 0 0.6rem;
+    border: 1px solid var(--wt-accent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 88%, black);
+    color: var(--wt-fg);
+    font-size: 0.85em;
+    padding: 0.4rem 0.6rem;
+}
+
+.wt-card-head {
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+}
+
+.wt-card-foot {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    margin-top: 0.35rem;
+}
+
+.wt-card-foot button {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 0.15rem 0.5rem;
+}
+
+.wt-review-btns .wt-approve-exp {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0 0.35rem;
+}
+
+.wt-review-btns .wt-approve-exp:hover {
+    border-color: var(--wt-accent);
+    color: var(--wt-accent);
 }
 
 .wt-review-actions {

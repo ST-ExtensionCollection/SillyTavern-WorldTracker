@@ -8,6 +8,7 @@ import { log } from './src/log.js';
 import { buildTrackerPrompt } from './src/prompt.js';
 import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
+import { diffToProposals, applyProposal } from './src/merge.js';
 import { initPanel, renderPanel, destroyPanel, replaceBanner, setBusy } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
@@ -126,13 +127,14 @@ async function onManualUpdate() {
         if (job.superseded) { log('response ignored (superseded)'); return; }
         log('tracker response (first 500):', String(text || '').slice(0, 500));
         const res = parseTrackerResponse(text);
-        if (res.ok) {
-            log('parsed tracker data:', res.data);
-            toastr.success('WorldTracker: parsed OK — merge/approval is the next milestone.');
-        } else {
+        if (!res.ok) {
             log('parse FAILED. data:', res.data, 'raw:', res.raw);
             toastr.warning('WorldTracker: could not parse tracker response (see console).');
+            return;
         }
+        log('parsed tracker data:', res.data);
+        const srcId = Math.max(0, (c.chat?.length ?? 1) - 1);
+        ingestProposals(st, diffToProposals(st, res.data, { sourceMessageId: srcId }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
         log('request error:', err);
@@ -157,13 +159,57 @@ function onRemoveCharacter(name) {
     refresh();
 }
 
+/**
+ * Route fresh proposals: auto-approved ones apply now, the rest go to the
+ * pending queue (shown in the panel + as an inline card on the message).
+ */
+function ingestProposals(st, proposals) {
+    if (!proposals.length) {
+        toastr.info('WorldTracker: no changes.');
+        refresh();
+        return;
+    }
+    const auto = new Set(settings.autoApproveFields || []);
+    let applied = 0;
+    let queued = 0;
+    for (const p of proposals) {
+        if (settings.autoApprove || auto.has(p.path)) {
+            applyProposal(st, p, settings.schema);
+            applied++;
+        } else {
+            state.addPending(st, p);
+            queued++;
+        }
+    }
+    log(`proposals: ${applied} auto-applied, ${queued} queued`);
+    if (applied && !queued) toastr.success(`WorldTracker: applied ${applied} change(s).`);
+    else if (queued) toastr.info(`WorldTracker: ${queued} change(s) to review${applied ? ` (${applied} auto-applied)` : ''}.`);
+    refresh();
+}
+
 function onApprove(id) {
     const st = getState();
     if (!st) return;
     const p = st.pending.find((x) => x.id === id);
     if (!p) return;
-    if (p.path === 'clock') st.clock.iso = p.toIso ?? p.to;
-    else state.applyValue(st, p.path, p.rawTo ?? p.to, p.sourceMessageId);
+    applyProposal(st, p, settings.schema);
+    state.removePending(st, id);
+    log('approved', p.path);
+    refresh();
+}
+
+/** Clock only: advance by the user's expected interval instead of the model's. */
+function onApproveExpected(id) {
+    const st = getState();
+    if (!st) return;
+    const p = st.pending.find((x) => x.id === id);
+    if (!p || p.kind !== 'clock') return;
+    const exp = st.clock.expectedInterval || {};
+    if (clockUtil.deltaToSeconds(exp) > 0) {
+        st.clock.iso = clockUtil.addElapsed(st.clock.iso, exp);
+        state.save();
+        log('clock: applied expected interval instead', exp);
+    }
     state.removePending(st, id);
     refresh();
 }
@@ -171,20 +217,26 @@ function onApprove(id) {
 function onDecline(id) {
     const st = getState();
     if (!st) return;
+    const p = st.pending.find((x) => x.id === id);
     state.removePending(st, id);
+    if (p) log('declined', p.path);
     refresh();
 }
 
 function onApproveAll() {
     const st = getState();
     if (!st) return;
-    for (const p of [...st.pending]) onApprove(p.id);
+    for (const p of [...st.pending]) applyProposal(st, p, settings.schema);
+    state.clearPending(st);
+    log('approved all');
+    refresh();
 }
 
 function onDeclineAll() {
     const st = getState();
     if (!st) return;
     state.clearPending(st);
+    log('declined all');
     refresh();
 }
 
@@ -361,8 +413,8 @@ jQuery(async () => {
 
     initPanel({ context: ctx, settings, getState, handlers: {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
-        onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onDecline,
-        onApproveAll, onDeclineAll, onOpenSettings,
+        onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
+        onDecline, onApproveAll, onDeclineAll, onOpenSettings,
     } });
 
     buildSettingsDrawer();

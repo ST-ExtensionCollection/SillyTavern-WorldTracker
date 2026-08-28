@@ -135,17 +135,80 @@ export function renderPanel() {
     if (!cfg) return;
     const { settings } = cfg;
     destroyPanel();
-    if (!settings.enabled) return;
-
-    const mode = settings.uiMode || 'banner';
-    if (mode === 'banner') renderBanner();
-    else if (mode === 'dock') renderDock();
-    else renderFloat();
+    if (settings.enabled) {
+        const mode = settings.uiMode || 'banner';
+        if (mode === 'banner') renderBanner();
+        else if (mode === 'dock') renderDock();
+        else renderFloat();
+    }
+    renderCards();
 }
 
 // ---------------------------------------------------------------------------
 // Shared content: the detail body (used by banner sheet, float, dock)
 // ---------------------------------------------------------------------------
+
+/** One pending-change row (shared by the panel review section and message cards). */
+function buildPendingItem(p) {
+    const { handlers } = cfg;
+    const $item = $(`
+        <div class="wt-review-item" data-id="${esc(p.id)}">
+            <div class="wt-review-label">${esc(p.label || p.path)}</div>
+            <div class="wt-review-diff"><span class="wt-from">${esc(p.from ?? '—')}</span><i class="fa-solid fa-arrow-right"></i><span class="wt-to">${esc(p.to ?? '—')}</span></div>
+            ${p.reason ? `<div class="wt-review-reason">${esc(p.reason)}</div>` : ''}
+            <div class="wt-review-btns">
+                ${p.kind === 'clock' ? `<button class="wt-approve-exp" title="Use your expected interval instead">exp</button>` : ''}
+                <button class="wt-approve" title="Approve"><i class="fa-solid fa-check"></i></button>
+                <button class="wt-decline" title="Decline"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+    `);
+    $item.find('.wt-approve').on('click', () => handlers.onApprove?.(p.id));
+    $item.find('.wt-decline').on('click', () => handlers.onDecline?.(p.id));
+    $item.find('.wt-approve-exp').on('click', () => handlers.onApproveExpected?.(p.id));
+    return $item;
+}
+
+function buildReviewSection(pending) {
+    const { handlers } = cfg;
+    const $q = $('<div class="wt-section wt-review"></div>');
+    $q.append(`<div class="wt-section-head"><i class="fa-solid fa-inbox"></i> Proposed changes (${pending.length})
+        <span class="wt-review-actions">
+            <button class="wt-approve-all">Approve all</button>
+            <button class="wt-decline-all">Decline all</button>
+        </span></div>`);
+    for (const p of pending) $q.append(buildPendingItem(p));
+    $q.find('.wt-approve-all').on('click', () => handlers.onApproveAll?.());
+    $q.find('.wt-decline-all').on('click', () => handlers.onDeclineAll?.());
+    return $q;
+}
+
+/** Inline diff cards attached to the messages that triggered pending changes. */
+function renderCards() {
+    $('.wt-card').remove();
+    const state = cfg.getState();
+    if (!cfg.settings.enabled || !state || !state.pending.length) return;
+
+    const byMsg = new Map();
+    for (const p of state.pending) {
+        const id = p.sourceMessageId;
+        if (id == null) continue;
+        if (!byMsg.has(id)) byMsg.set(id, []);
+        byMsg.get(id).push(p);
+    }
+    for (const [mesId, items] of byMsg) {
+        const mes = document.querySelector(`.mes[mesid="${mesId}"]`);
+        const anchor = mes?.querySelector('.mes_text');
+        if (!mes || !anchor) continue;
+        const $card = $(`<div class="wt-card"><div class="wt-card-head"><i class="fa-solid fa-compass"></i> WorldTracker — ${items.length} proposed change${items.length > 1 ? 's' : ''}</div></div>`);
+        for (const p of items) $card.append(buildPendingItem(p));
+        const $foot = $(`<div class="wt-card-foot"><button class="wt-approve-all">Approve all</button><button class="wt-decline-all">Decline all</button></div>`);
+        $foot.find('.wt-approve-all').on('click', () => cfg.handlers.onApproveAll?.());
+        $foot.find('.wt-decline-all').on('click', () => cfg.handlers.onDeclineAll?.());
+        $card.append($foot);
+        anchor.before($card[0]);
+    }
+}
 
 function buildDetailBody() {
     const state = cfg.getState();
@@ -157,33 +220,7 @@ function buildDetailBody() {
     }
 
     // Pending review queue
-    if (state.pending.length) {
-        const $q = $('<div class="wt-section wt-review"></div>');
-        $q.append(`<div class="wt-section-head"><i class="fa-solid fa-inbox"></i> Proposed changes (${state.pending.length})
-            <span class="wt-review-actions">
-                <button class="wt-approve-all" title="Approve all">Approve all</button>
-                <button class="wt-decline-all" title="Decline all">Decline all</button>
-            </span></div>`);
-        for (const p of state.pending) {
-            const $item = $(`
-                <div class="wt-review-item" data-id="${esc(p.id)}">
-                    <div class="wt-review-label">${esc(p.label || p.path)}</div>
-                    <div class="wt-review-diff"><span class="wt-from">${esc(p.from ?? '—')}</span><i class="fa-solid fa-arrow-right"></i><span class="wt-to">${esc(p.to ?? '—')}</span></div>
-                    ${p.reason ? `<div class="wt-review-reason">${esc(p.reason)}</div>` : ''}
-                    <div class="wt-review-btns">
-                        <button class="wt-approve" title="Approve"><i class="fa-solid fa-check"></i></button>
-                        <button class="wt-decline" title="Decline"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                </div>
-            `);
-            $item.find('.wt-approve').on('click', () => handlers.onApprove?.(p.id));
-            $item.find('.wt-decline').on('click', () => handlers.onDecline?.(p.id));
-            $q.append($item);
-        }
-        $q.find('.wt-approve-all').on('click', () => handlers.onApproveAll?.());
-        $q.find('.wt-decline-all').on('click', () => handlers.onDeclineAll?.());
-        $body.append($q);
-    }
+    if (state.pending.length) $body.append(buildReviewSection(state.pending));
 
     const showLock = settings.showLockIcons !== false;
     const onEdit = (path, val) => handlers.onEdit?.(path, val);

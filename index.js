@@ -455,20 +455,25 @@ jQuery(async () => {
     const autoUpdate = (why) => {
         clearTimeout(autoTimer);
         autoTimer = setTimeout(() => {
-            if (!settings.enabled || genActive || updateJob) return;
+            if (!settings.enabled || genActive || updateJob) {
+                log(`auto-update skipped (${why}): enabled=${settings.enabled} genActive=${genActive} inFlight=${!!updateJob}`);
+                return;
+            }
             if (!getState()) return;
-            log(`auto-update (${why})`);
+            log(`auto-update firing (${why})`);
             onManualUpdate();
         }, Math.max(200, Number(settings.debounceMs) || 1200));
     };
-    eventSource.on(event_types.GENERATION_STARTED, () => { genActive = true; });
-    for (const ev of ['GENERATION_ENDED', 'GENERATION_STOPPED']) {
-        if (event_types[ev]) eventSource.on(event_types[ev], () => { genActive = false; });
-    }
-    eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, () => {
+    // Ignore dry-run generations (prompt itemization fires GENERATION_STARTED
+    // with dryRun=true and no matching GENERATION_ENDED).
+    eventSource.on(event_types.GENERATION_STARTED, (_type, _opts, dryRun) => { if (!dryRun) genActive = true; });
+    eventSource.on(event_types.GENERATION_ENDED, () => { genActive = false; });
+    eventSource.on(event_types.GENERATION_STOPPED, () => { genActive = false; });
+    eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => {
+        log(`CHARACTER_MESSAGE_RENDERED id=${id} autoMode=${settings.autoMode}`);
         if (['ai', 'both'].includes(settings.autoMode)) autoUpdate('ai message');
     });
-    eventSource.on(event_types.USER_MESSAGE_RENDERED, () => {
+    eventSource.on(event_types.USER_MESSAGE_RENDERED, (id) => {
         if (['user', 'both'].includes(settings.autoMode)) autoUpdate('user message');
     });
 

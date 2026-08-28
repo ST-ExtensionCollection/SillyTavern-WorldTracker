@@ -11,8 +11,10 @@ import * as clock from '../clock.js';
 const ROOT_ID = 'wt-root';
 const BAR_ID = 'wt-bar';
 const INLINE_ID = 'wt-inline';
+const SHEET_ID = 'wt-sheet';
 
 let cfg = null; // { context, settings, getState, handlers }
+let sheetReposHandler = null;
 
 export function initPanel(config) {
     cfg = config;
@@ -22,6 +24,12 @@ export function destroyPanel() {
     $(`#${ROOT_ID}`).remove();
     $(`#${BAR_ID}`).remove();
     $(`#${INLINE_ID}`).remove();
+    $(`#${SHEET_ID}`).remove();
+    if (sheetReposHandler) {
+        window.removeEventListener('resize', sheetReposHandler);
+        window.removeEventListener('scroll', sheetReposHandler, true);
+        sheetReposHandler = null;
+    }
     $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right');
 }
 
@@ -45,19 +53,39 @@ function patchSheld(sheld) {
 }
 
 /**
- * Decide how to mount the banner:
- *  - 'inline' : append a wrapped full-width row INSIDE TopInfoBar's
- *    #extensionTopBar so it inherits that bar's tint / blur / hover exactly.
- *  - 'sibling': our own #wt-bar row inside #sheld before #chat.
- *  - null     : expected layout not present -> caller uses fixed fallback.
+ * Where to mount the banner strip:
+ *  - { mode:'inline', tib } : as a wrapped full-width row inside TopInfoBar's
+ *    #extensionTopBar, so it inherits that bar's tint / blur / hover. CSS
+ *    (body:has(#wt-inline) #extensionTopBar) lets the bar grow to fit it;
+ *    we never touch its position or z-index.
+ *  - { mode:'sibling', sheld, before } : our own #wt-bar row inside #sheld.
+ *  - null : expected layout absent -> caller uses a fixed fallback strip.
  */
 function barAnchor() {
+    const tib = document.getElementById('extensionTopBar');
+    if (tib) return { mode: 'inline', tib };
     const sheld = document.getElementById('sheld');
     const chatEl = document.getElementById('chat');
     if (!sheld || !chatEl || chatEl.parentElement !== sheld) return null;
-    const tib = document.getElementById('extensionTopBar');
-    if (tib && tib.parentElement === sheld) return { mode: 'inline', sheld, tib };
     return { mode: 'sibling', sheld, before: chatEl };
+}
+
+/** Anchor element the expand-sheet is positioned under (the visible strip). */
+function stripAnchorEl() {
+    return document.getElementById(INLINE_ID)
+        || document.getElementById(BAR_ID)
+        || document.getElementById(ROOT_ID);
+}
+
+/** Position the fixed expand-sheet directly under the strip. */
+function positionSheet() {
+    const sheet = document.getElementById(SHEET_ID);
+    const anchor = stripAnchorEl();
+    if (!sheet || !anchor) return;
+    const r = anchor.getBoundingClientRect();
+    sheet.style.top = `${Math.round(r.bottom)}px`;
+    sheet.style.left = `${Math.round(r.left)}px`;
+    sheet.style.width = `${Math.round(r.width)}px`;
 }
 
 /** Full rebuild from current state + settings. Safe to call often. */
@@ -199,14 +227,11 @@ function renderBanner() {
     const expanded = !!settings.bannerExpanded;
 
     const anchor = barAnchor();
-    if (anchor) patchSheld(anchor.sheld);
+    if (anchor && anchor.mode === 'sibling') patchSheld(anchor.sheld);
 
-    // inline  -> wrapped full-width row inside #extensionTopBar (inherits its look)
-    // sibling -> our own #wt-bar row inside #sheld
-    // null    -> fixed fallback strip on <body>
     let $root;
     if (anchor && anchor.mode === 'inline') {
-        $root = $(`<div id="${INLINE_ID}" class="wt-inline${expanded ? ' wt-expanded' : ''}"></div>`);
+        $root = $(`<div id="${INLINE_ID}"${expanded ? ' class="wt-expanded"' : ''}></div>`);
     } else if (anchor && anchor.mode === 'sibling') {
         $root = $(`<div id="${BAR_ID}" class="wt-bar${expanded ? ' wt-expanded' : ''}"></div>`);
     } else {
@@ -235,13 +260,21 @@ function renderBanner() {
 
     $root.append($('<div class="wt-strip-wrap"></div>').append($strip).append($right));
 
-    if (expanded) {
-        $root.append($('<div class="wt-sheet"></div>').append(buildDetailBody()));
-    }
-
     if (anchor && anchor.mode === 'inline') anchor.tib.appendChild($root[0]);
     else if (anchor && anchor.mode === 'sibling') anchor.sheld.insertBefore($root[0], anchor.before);
     else $('body').append($root);
+
+    // Expand sheet: a fixed-position element on <body>, positioned under the
+    // strip. Fixed + high z-index sidesteps every clipping / stacking-context
+    // issue from whatever the theme does to #extensionTopBar or #sheld.
+    if (expanded) {
+        const $sheet = $(`<div id="${SHEET_ID}" class="wt-sheet"></div>`).append(buildDetailBody());
+        $('body').append($sheet);
+        positionSheet();
+        sheetReposHandler = () => positionSheet();
+        window.addEventListener('resize', sheetReposHandler);
+        window.addEventListener('scroll', sheetReposHandler, true);
+    }
 }
 
 /** Re-run banner placement (e.g. if TopInfoBar mounted after us). */

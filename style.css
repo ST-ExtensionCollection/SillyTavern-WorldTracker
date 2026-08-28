@@ -1,0 +1,453 @@
+/* WorldTracker */
+
+:root {
+    --wt-z-dock: 3000;
+    --wt-z-banner: 3010;
+    --wt-z-float: 3020;
+    --wt-z-card: 30;
+    --wt-bg: var(--SmartThemeBlurTintColor, #1b1b25);
+    --wt-fg: var(--SmartThemeBodyColor, #e8e8e8);
+    --wt-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.2));
+    --wt-accent: var(--SmartThemeQuoteColor, #6ea8fe);
+    --wt-strip-h: 2.2rem;
+}
+
+#wt-root,
+#wt-root * {
+    box-sizing: border-box;
+}
+
+/* ---------------- Banner ---------------- */
+
+.wt-banner {
+    position: fixed;
+    top: var(--topBarBlockSize, 0px);
+    left: 0;
+    right: 0;
+    z-index: var(--wt-z-banner);
+    background: color-mix(in srgb, var(--wt-bg) 92%, black);
+    border-bottom: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    font-size: 0.82rem;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+body.wt-has-banner #sheld {
+    margin-top: calc(var(--topBarBlockSize, 0px) + var(--wt-strip-h)) !important;
+}
+
+.wt-strip-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: var(--wt-strip-h);
+    padding: 0 0.5rem;
+}
+
+.wt-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: thin;
+}
+
+.wt-strip-right {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.wt-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--wt-border);
+    border-radius: 999px;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.wt-chip.wt-locked {
+    border-color: var(--wt-accent);
+}
+
+.wt-chip-lock {
+    opacity: 0.7;
+    font-size: 0.7em;
+}
+
+.wt-chip .wt-chip-v {
+    font-weight: 600;
+}
+
+/* ---------------- Toolbar / buttons ---------------- */
+
+.wt-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.wt-btn {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 5px;
+    padding: 0.2rem 0.45rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.wt-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.wt-mode {
+    background: transparent;
+    color: var(--wt-fg);
+    border: 1px solid var(--wt-border);
+    border-radius: 5px;
+    padding: 0.15rem;
+}
+
+.wt-review-badge {
+    position: relative;
+}
+
+.wt-review-badge .wt-badge-n {
+    margin-left: 0.3rem;
+    font-weight: 700;
+}
+
+.wt-review-badge.wt-has-pending {
+    border-color: var(--wt-accent);
+    color: var(--wt-accent);
+}
+
+/* ---------------- Detail sheet ---------------- */
+
+.wt-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    max-height: 46vh;
+    overflow-y: auto;
+    background: color-mix(in srgb, var(--wt-bg) 96%, black);
+    border-bottom: 1px solid var(--wt-border);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.wt-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.wt-section-head {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    margin: 0.3rem 0 0.15rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.wt-field-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0.15rem;
+    border-bottom: 1px dashed var(--wt-border);
+}
+
+.wt-field-ico {
+    width: 1.1rem;
+    text-align: center;
+    opacity: 0.7;
+}
+
+.wt-field-label {
+    text-transform: capitalize;
+    opacity: 0.85;
+    min-width: 6rem;
+}
+
+.wt-field-value {
+    flex: 1;
+    font-weight: 600;
+    cursor: text;
+    border-radius: 4px;
+    padding: 0.1rem 0.3rem;
+}
+
+.wt-field-value:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.wt-field-row.wt-locked .wt-field-value {
+    color: var(--wt-accent);
+}
+
+.wt-lock-btn,
+.wt-edit-ok,
+.wt-edit-cancel {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    line-height: 1;
+}
+
+.wt-field-row.wt-locked .wt-lock-btn {
+    color: var(--wt-accent);
+    border-color: var(--wt-accent);
+}
+
+.wt-field-editor {
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+    flex: 1;
+}
+
+.wt-field-editor .wt-edit-input {
+    flex: 1;
+    background: var(--wt-bg);
+    color: var(--wt-fg);
+    border: 1px solid var(--wt-border);
+    border-radius: 4px;
+    padding: 0.15rem 0.35rem;
+}
+
+/* ---------------- Characters ---------------- */
+
+.wt-char {
+    border: 1px solid var(--wt-border);
+    border-radius: 6px;
+    padding: 0.3rem 0.45rem;
+    margin-bottom: 0.4rem;
+}
+
+.wt-char-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.2rem;
+}
+
+.wt-char-name {
+    font-weight: 700;
+    flex: 1;
+}
+
+.wt-updater {
+    background: transparent;
+    color: var(--wt-fg);
+    border: 1px solid var(--wt-border);
+    border-radius: 4px;
+    padding: 0.1rem;
+    font-size: 0.75rem;
+}
+
+.wt-char-remove {
+    background: transparent;
+    border: none;
+    color: var(--wt-fg);
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.wt-char-remove:hover {
+    opacity: 1;
+}
+
+/* ---------------- Review queue ---------------- */
+
+.wt-review {
+    border: 1px solid var(--wt-accent);
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    background: color-mix(in srgb, var(--wt-accent) 8%, transparent);
+}
+
+.wt-review-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.3rem;
+}
+
+.wt-review-actions button {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0.1rem 0.4rem;
+}
+
+.wt-review-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "label btns" "diff btns" "reason btns";
+    gap: 0.1rem 0.5rem;
+    padding: 0.35rem 0;
+    border-top: 1px dashed var(--wt-border);
+}
+
+.wt-review-item:first-of-type {
+    border-top: none;
+}
+
+.wt-review-label {
+    grid-area: label;
+    font-weight: 700;
+    text-transform: capitalize;
+}
+
+.wt-review-diff {
+    grid-area: diff;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+}
+
+.wt-review-diff .wt-from {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.wt-review-diff .wt-to {
+    color: var(--wt-accent);
+    font-weight: 600;
+}
+
+.wt-review-reason {
+    grid-area: reason;
+    font-size: 0.74rem;
+    opacity: 0.7;
+}
+
+.wt-review-btns {
+    grid-area: btns;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    justify-content: center;
+}
+
+.wt-review-btns button {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+}
+
+.wt-review-btns .wt-approve:hover {
+    border-color: #3fb950;
+    color: #3fb950;
+}
+
+.wt-review-btns .wt-decline:hover {
+    border-color: #f85149;
+    color: #f85149;
+}
+
+.wt-empty {
+    opacity: 0.6;
+    font-style: italic;
+    padding: 0.3rem;
+}
+
+/* ---------------- Float ---------------- */
+
+.wt-float {
+    position: fixed;
+    z-index: var(--wt-z-float);
+    min-width: 240px;
+    min-height: 160px;
+    background: color-mix(in srgb, var(--wt-bg) 94%, black);
+    border: 1px solid var(--wt-border);
+    border-radius: 8px;
+    color: var(--wt-fg);
+    font-size: 0.82rem;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.wt-float-head,
+.wt-dock-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--wt-border);
+    cursor: move;
+    font-weight: 700;
+}
+
+.wt-float-body,
+.wt-dock-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0.6rem;
+}
+
+/* ---------------- Dock ---------------- */
+
+.wt-dock {
+    position: fixed;
+    top: var(--topBarBlockSize, 0px);
+    bottom: 0;
+    z-index: var(--wt-z-dock);
+    width: min(340px, calc(50vw - var(--sheldWidth, 50vw) / 2));
+    background: color-mix(in srgb, var(--wt-bg) 94%, black);
+    border-left: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    font-size: 0.82rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.wt-dock-left {
+    left: 0;
+    border-left: none;
+    border-right: 1px solid var(--wt-border);
+}
+
+.wt-dock-right {
+    right: 0;
+}
+
+.wt-dock-head {
+    cursor: default;
+}
+
+body.wt-has-dock #sheld {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+@media (max-width: 1000px) {
+    .wt-dock {
+        display: none;
+    }
+}

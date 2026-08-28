@@ -9,6 +9,7 @@ import { displayValue, esc, iconFor } from './format.js';
 import * as clock from '../clock.js';
 
 const ROOT_ID = 'wt-root';
+const BAR_ID = 'wt-bar';
 
 let cfg = null; // { context, settings, getState, handlers }
 
@@ -18,7 +19,31 @@ export function initPanel(config) {
 
 export function destroyPanel() {
     $(`#${ROOT_ID}`).remove();
-    $('body').removeClass('wt-has-banner wt-has-dock wt-dock-left wt-dock-right');
+    $(`#${BAR_ID}`).remove();
+    $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right');
+}
+
+/**
+ * SillyTavern's #sheld is a grid in some versions; TopInfoBar flips it to a
+ * flex column so inserted rows stack. Do the same (idempotent, harmless if
+ * TopInfoBar already did it or if #sheld is already flex).
+ */
+function patchSheld(sheld) {
+    if (getComputedStyle(sheld).display === 'grid') sheld.classList.add('wt-flexpatch');
+}
+
+/**
+ * Find where our in-flow bar belongs inside #sheld: directly after
+ * TopInfoBar's #extensionTopBar when present, otherwise as the first row
+ * before #chat. Returns { sheld, before } or null if the layout isn't there.
+ */
+function barAnchor() {
+    const sheld = document.getElementById('sheld');
+    const chatEl = document.getElementById('chat');
+    if (!sheld || !chatEl || chatEl.parentElement !== sheld) return null;
+    const tib = document.getElementById('extensionTopBar');
+    const before = (tib && tib.parentElement === sheld) ? tib.nextSibling : chatEl;
+    return { sheld, before, underTib: !!(tib && tib.parentElement === sheld) };
 }
 
 /** Full rebuild from current state + settings. Safe to call often. */
@@ -154,7 +179,13 @@ function renderBanner() {
     const pendingCount = state ? state.pending.length : 0;
     const expanded = !!settings.bannerExpanded;
 
-    const $root = $(`<div id="${ROOT_ID}" class="wt-banner${expanded ? ' wt-expanded' : ''}"></div>`);
+    const anchor = barAnchor();
+    if (anchor) patchSheld(anchor.sheld);
+    // In-flow bar inside #sheld (centres with the chat column, like TopInfoBar).
+    // Falls back to a fixed strip on <body> if the expected layout isn't found.
+    const $root = anchor
+        ? $(`<div id="${BAR_ID}" class="wt-bar${anchor.underTib ? ' wt-under-tib' : ''}${expanded ? ' wt-expanded' : ''}"></div>`)
+        : $(`<div id="${ROOT_ID}" class="wt-bar wt-bar-floating${expanded ? ' wt-expanded' : ''}"></div>`);
 
     // chip strip
     const $strip = $('<div class="wt-strip"></div>');
@@ -186,7 +217,15 @@ function renderBanner() {
         $root.append($('<div class="wt-sheet"></div>').append(buildDetailBody()));
     }
 
-    $('body').append($root).addClass('wt-has-banner');
+    if (anchor) anchor.sheld.insertBefore($root[0], anchor.before);
+    else $('body').append($root);
+}
+
+/** Re-run banner placement (e.g. if TopInfoBar mounted after us). */
+export function replaceBanner() {
+    if (cfg && cfg.settings.enabled && (cfg.settings.uiMode || 'banner') === 'banner') {
+        renderPanel();
+    }
 }
 
 function chip(path, label, value, locked) {

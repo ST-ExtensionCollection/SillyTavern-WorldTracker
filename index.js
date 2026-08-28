@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 import { loadSettings, MODULE_NAME } from './src/settings.js';
 import * as state from './src/state.js';
 import * as clockUtil from './src/clock.js';
-import { initPanel, renderPanel, destroyPanel } from './src/ui/panel.js';
+import { initPanel, renderPanel, destroyPanel, replaceBanner } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
 const {
@@ -240,6 +240,11 @@ jQuery(async () => {
         state.get(settings.schema); // seed/reconcile for the new chat
         refresh();
     });
+
+    // The chat layout (#sheld) and sibling extensions like TopInfoBar may not be
+    // in the DOM yet when we boot. Re-place the banner once things settle.
+    if (event_types.APP_READY) eventSource.once(event_types.APP_READY, () => replaceBanner());
+    setTimeout(() => replaceBanner(), 1500);
 
     refresh();
     console.log(`[${MODULE_NAME}] loaded`);

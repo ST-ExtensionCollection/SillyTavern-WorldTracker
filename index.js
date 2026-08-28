@@ -85,6 +85,23 @@ function onModeChange(mode) {
 
 let updateJob = null;
 
+/** ⟳ button: start an update, or stop the running one. */
+function onUpdateButton() {
+    if (updateJob) return stopUpdate('user');
+    return onManualUpdate();
+}
+
+function stopUpdate(who) {
+    if (!updateJob) return;
+    const job = updateJob;
+    job.superseded = true;
+    try { job.controller.abort(); } catch { /* ignore */ }
+    updateJob = null;
+    setBusy(false);
+    log(`update aborted (${who})`);
+    if (who === 'user') toastr.info('WorldTracker: update cancelled.');
+}
+
 async function onManualUpdate() {
     const st = getState();
     if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
@@ -344,8 +361,8 @@ jQuery(async () => {
 
     initPanel({ context: ctx, settings, getState, handlers: {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
-        onSetUpdater, onRemoveCharacter, onApprove, onDecline, onApproveAll,
-        onDeclineAll, onOpenSettings,
+        onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onDecline,
+        onApproveAll, onDeclineAll, onOpenSettings,
     } });
 
     buildSettingsDrawer();
@@ -355,6 +372,7 @@ jQuery(async () => {
         let id;
         try { id = ctx.getCurrentChatId?.(); } catch { /* ignore */ }
         log(`chat changed -> ${id ?? '(none)'}`);
+        stopUpdate('chat-changed'); // don't apply another chat's tracker result here
         state.get(settings.schema); // seed/reconcile for the new chat
         refresh();
     });

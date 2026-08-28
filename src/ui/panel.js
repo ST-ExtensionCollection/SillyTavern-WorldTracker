@@ -20,11 +20,12 @@ export function initPanel(config) {
     cfg = config;
 }
 
-/** Toggle the "updating" spinner on the refresh button. */
+/** Toggle the refresh button between "update now" and "stop" (spinner). */
 export function setBusy(busy) {
     const $btn = $('.wt-update');
     $btn.toggleClass('wt-spin', !!busy);
-    $btn.prop('disabled', !!busy);
+    $btn.attr('title', busy ? 'Stop the running update' : 'Update tracker now');
+    $btn.find('i').attr('class', busy ? 'fa-solid fa-stop' : 'fa-solid fa-rotate');
 }
 
 export function destroyPanel() {
@@ -246,7 +247,7 @@ function buildToolbar() {
             <button class="wt-btn wt-settings" title="WorldTracker settings"><i class="fa-solid fa-gear"></i></button>
         </div>
     `);
-    $bar.find('.wt-update').on('click', () => handlers.onManualUpdate?.());
+    $bar.find('.wt-update').on('click', () => handlers.onUpdateButton?.());
     $bar.find('.wt-mode').on('change', function () { handlers.onModeChange?.($(this).val()); });
     $bar.find('.wt-settings').on('click', () => handlers.onOpenSettings?.());
     return $bar;

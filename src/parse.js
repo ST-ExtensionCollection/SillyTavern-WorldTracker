@@ -6,12 +6,37 @@
 
 const ENVELOPE_KEYS = ['tracker', 'trackers', 'state', 'world_state', 'worldstate', 'result', 'data', 'update', 'json'];
 
-/** Strip reasoning blocks and obvious noise. */
+/**
+ * Strip reasoning / channel noise. Handles: ST's configured reasoning template
+ * (<think>…</think> by default, user-set), generic <thinking>/<thought>, and
+ * OpenAI "harmony" channel markup (<|channel|>analysis<|message|>…<|end|>,
+ * <|start|>assistant…). If harmony `final` channel is present, keep only what
+ * follows it.
+ */
 function preclean(s) {
-    return String(s)
+    let t = String(s);
+
+    // ST reasoning template (prefix…suffix), non-strict.
+    try {
+        const parse = globalThis.SillyTavern?.getContext?.().parseReasoningFromString;
+        if (typeof parse === 'function') {
+            const r = parse(t, { strict: false });
+            if (r && r.content) t = r.content;
+        }
+    } catch { /* ignore */ }
+
+    // Harmony: if there's a final channel, everything before it is reasoning.
+    const finalMarker = t.match(/<\|channel\|?>\s*final\s*<\|message\|?>/i);
+    if (finalMarker) t = t.slice(finalMarker.index + finalMarker[0].length);
+
+    t = t
+        .replace(/<\|channel\|?>[\s\S]*?<\|message\|?>/gi, '')
+        .replace(/<\|(?:start|end|return|constrain)\|?>/gi, '')
+        .replace(/<\|channel\|?>\s*\w+/gi, '')
         .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
-        .replace(/<\/?(?:thought|reasoning)>/gi, '')
-        .trim();
+        .replace(/<\/?(?:think|thinking|thought|reasoning|analysis)>/gi, '');
+
+    return t.trim();
 }
 
 /** Light JSON repair: trailing commas, smart quotes, JS-style comments. */

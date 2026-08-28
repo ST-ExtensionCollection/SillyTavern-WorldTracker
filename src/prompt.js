@@ -1,52 +1,80 @@
 // WorldTracker — builds the extraction query sent to the tracker model.
 //
-// The model is shown the current canonical state and the recent messages, and
-// asked to return ONE JSON object describing the current state. Locked fields
-// are presented as immutable. The clock is asked for ELAPSED time only, never an
-// absolute date — WorldTracker does the date arithmetic itself.
+// The model is shown the CURRENT canonical state (as the JSON it should return,
+// pre-filled with the real current values) plus the recent messages, and asked
+// to return that same object with any changed fields updated. Locked fields are
+// marked immutable. The clock is asked for ELAPSED time only, never an absolute
+// date — WorldTracker does the date arithmetic itself.
 
 import { format } from './clock.js';
 
 const DEFAULT_SYSTEM =
-    'You are a world-state tracker for a roleplay. Read the recent messages and report the CURRENT world state as a single JSON object. '
-    + 'Output ONLY the JSON object — no prose, no explanation, no markdown fence commentary. '
-    + 'For every field: if the recent messages show it changed, report the new value; otherwise repeat the current value unchanged. '
-    + 'Never invent detail that is not supported by the messages or the current state.';
+    'You are a world-state tracker for a roleplay. You receive the current world state as JSON and the recent messages. '
+    + 'Reply with the SAME JSON object, changing only the fields the recent messages show have changed; copy everything else unchanged. '
+    + 'Output ONLY the JSON object — no prose, no markdown, no commentary, and do not think out loud. '
+    + 'Never invent detail that the messages do not support.';
 
-function fmtClock(state) {
-    return format(state.clock.iso, state.clock.displayFormat);
+/** Remove injected tracker JSON / code blocks / tag soup from a message body. */
+function cleanMessage(mes, cap) {
+    let s = String(mes ?? '');
+    s = s.replace(/```[\s\S]*?```/g, ' ');          // fenced code / injected JSON
+    s = s.replace(/<[^>]{1,40}>/g, ' ');            // short html/xml tags
+    s = s.replace(/\{[^{}]*"[^{}]*\}/g, ' ');       // stray inline json-ish objects
+    s = s.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    if (cap && s.length > cap) s = `${s.slice(0, cap)}…`;
+    return s;
 }
 
-/** A filled-in example object showing the exact shape wanted back. */
-function exampleShape(state) {
-    const ex = {};
+/** The object we want back, pre-filled with the current real values. */
+function currentAsJson(state) {
+    const o = {};
     if (state.clock && !state.clock.locked) {
-        ex.clock = { elapsed: { days: 0, hours: 0, minutes: 1, seconds: 0 } };
+        o.clock = { elapsed: { days: 0, hours: 0, minutes: 0, seconds: 0 } };
     }
     if (Object.keys(state.world).length) {
-        ex.world = {};
-        for (const [k, f] of Object.entries(state.world)) {
-            ex.world[k] = f.type === 'number' ? 0 : 'string';
-        }
+        o.world = {};
+        for (const [k, f] of Object.entries(state.world)) o.world[k] = f.value;
     }
     if (Object.keys(state.userStats).length) {
-        ex.userStats = {};
-        for (const k of Object.keys(state.userStats)) ex.userStats[k] = 0;
+        o.userStats = {};
+        for (const [k, f] of Object.entries(state.userStats)) o.userStats[k] = f.value;
     }
     const names = Object.keys(state.characters);
     if (names.length) {
-        ex.characters = {};
+        o.characters = {};
         for (const name of names) {
-            const c = state.characters[name];
-            ex.characters[name] = {};
-            for (const [fk, ff] of Object.entries(c.fields)) {
-                ex.characters[name][fk] = ff.type === 'enum' && Array.isArray(ff.options)
-                    ? (ff.options[0] ?? 'string')
-                    : (ff.type === 'number' ? 0 : 'string');
+            o.characters[name] = {};
+            for (const [fk, ff] of Object.entries(state.characters[name].fields)) {
+                o.characters[name][fk] = ff.value;
             }
         }
     }
-    return ex;
+    return o;
+}
+
+/** Human notes about constraints that don't fit in the JSON. */
+function constraintNotes(state) {
+    const notes = [];
+    if (state.clock && !state.clock.locked) {
+        notes.push(`- clock.elapsed = in-world time passed since ${JSON.stringify(format(state.clock.iso, state.clock.displayFormat))}. Dialogue back-and-forth is seconds. Never output an absolute date/time.`);
+    } else if (state.clock?.locked) {
+        notes.push('- clock: LOCKED. Omit the clock key entirely.');
+    }
+    for (const [k, f] of Object.entries(state.world)) {
+        if (f.locked) notes.push(`- world.${k}: LOCKED — must stay ${JSON.stringify(f.value)}.`);
+        else if (f.type === 'number' && f.unit) notes.push(`- world.${k}: number in ${f.unit}.`);
+    }
+    for (const [k, f] of Object.entries(state.userStats)) {
+        if (f.locked) notes.push(`- userStats.${k}: LOCKED — must stay ${f.value}.`);
+        else if (f.max != null) notes.push(`- userStats.${k}: integer 0–${f.max}.`);
+    }
+    for (const [name, c] of Object.entries(state.characters)) {
+        for (const [fk, ff] of Object.entries(c.fields)) {
+            if (ff.locked) notes.push(`- characters.${name}.${fk}: LOCKED — must stay ${JSON.stringify(ff.value)}.`);
+            else if (ff.type === 'enum' && Array.isArray(ff.options)) notes.push(`- characters.${name}.${fk}: one of ${ff.options.join(' / ')}.`);
+        }
+    }
+    return notes;
 }
 
 /**
@@ -58,51 +86,26 @@ function exampleShape(state) {
 export function buildTrackerPrompt(state, recent, opts = {}) {
     const { settings = {}, playerName } = opts;
     const sys = settings.promptOverrides?.system || DEFAULT_SYSTEM;
+    const cap = Number(settings.maxMessageChars) || 1500;
     const L = [];
 
-    L.push('== CURRENT STATE ==');
+    L.push('CURRENT WORLD STATE — reply with this object, updated:');
+    L.push('```json');
+    L.push(JSON.stringify(currentAsJson(state), null, 2));
+    L.push('```');
 
-    if (state.clock) {
-        if (state.clock.locked) {
-            L.push(`Time: LOCKED at "${fmtClock(state)}". Do NOT report elapsed time.`);
-        } else {
-            L.push(`Time: the last update was at in-world time "${fmtClock(state)}". Report ONLY how much IN-WORLD time has passed since then as clock.elapsed = { days, hours, minutes, seconds }. Back-and-forth dialogue is usually seconds. If nothing indicates a jump, use a small value. Do NOT output an absolute date or time.`);
-        }
-    }
-
-    for (const [k, f] of Object.entries(state.world)) {
-        const unit = f.type === 'number' && f.unit ? ` ${f.unit}` : '';
-        if (f.locked) L.push(`${k}: LOCKED = ${JSON.stringify(f.value)}${unit}. Repeat exactly, never change.`);
-        else L.push(`${k}: currently ${JSON.stringify(f.value)}${unit}.`);
-    }
-
-    for (const [k, f] of Object.entries(state.userStats)) {
-        const range = f.max != null ? ` (0–${f.max})` : '';
-        if (f.locked) L.push(`${k}: LOCKED = ${f.value}${range}. Repeat exactly.`);
-        else L.push(`${k}: currently ${f.value}${range}.`);
+    const notes = constraintNotes(state);
+    if (notes.length) {
+        L.push('');
+        L.push('Constraints:');
+        L.push(...notes);
     }
 
     const names = Object.keys(state.characters);
     if (names.length) {
         L.push('');
-        L.push(`Characters — report these NPCs only${playerName ? `, never the player (${playerName})` : ''}:`);
-        for (const name of names) {
-            const c = state.characters[name];
-            const bits = Object.entries(c.fields).map(([fk, ff]) => {
-                if (ff.locked) return `${fk}=LOCKED(${JSON.stringify(ff.value)})`;
-                if (ff.type === 'enum' && Array.isArray(ff.options)) return `${fk} (one of: ${ff.options.join(', ')})`;
-                return fk;
-            });
-            L.push(`- ${name}: ${bits.join('; ')}`);
-        }
+        L.push(`Only report these NPCs: ${names.join(', ')}${playerName ? `. Never report the player (${playerName}).` : '.'}`);
     }
-
-    L.push('');
-    L.push('== RETURN EXACTLY THIS SHAPE ==');
-    L.push('```json');
-    L.push(JSON.stringify(exampleShape(state), null, 2));
-    L.push('```');
-    L.push('Omit any key you have no update for. Locked fields: repeat their current value, do not change.');
 
     if (settings.promptOverrides?.instruction) {
         L.push('');
@@ -110,11 +113,15 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     }
 
     L.push('');
-    L.push('== RECENT MESSAGES ==');
+    L.push('RECENT MESSAGES (oldest first):');
     for (const m of recent) {
         const who = m.is_user ? (playerName || 'User') : (m.name || 'Character');
-        L.push(`${who}: ${String(m.mes ?? '').trim()}`);
+        const body = cleanMessage(m.mes, cap);
+        if (body) L.push(`${who}: ${body}`);
     }
+
+    L.push('');
+    L.push('Now output the updated JSON object only.');
 
     return {
         messages: [

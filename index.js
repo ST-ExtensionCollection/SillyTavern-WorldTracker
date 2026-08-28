@@ -83,26 +83,30 @@ function onModeChange(mode) {
     refresh();
 }
 
-let updateInFlight = null;
+let updateJob = null;
 
 async function onManualUpdate() {
     const st = getState();
     if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
-    if (updateInFlight) { updateInFlight.abort(); }
+
+    if (updateJob) {
+        updateJob.superseded = true;
+        try { updateJob.controller.abort(); } catch { /* ignore */ }
+    }
 
     const c = SillyTavern.getContext();
     const n = Math.max(1, Number(settings.includeLastXMessages) || 6);
     const recent = (c.chat || []).slice(-n).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
     const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1 });
 
-    const controller = new AbortController();
-    updateInFlight = controller;
+    const job = { controller: new AbortController(), superseded: false };
+    updateJob = job;
     setBusy(true);
     log(`tracker request: ${recent.length} msg(s), ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
 
     try {
-        const text = await runTrackerRequest(messages, settings, c, controller.signal);
-        if (controller.signal.aborted) return;
+        const text = await runTrackerRequest(messages, settings, c, job.controller.signal);
+        if (job.superseded) { log('response ignored (superseded)'); return; }
         log('tracker response (first 500):', String(text || '').slice(0, 500));
         const res = parseTrackerResponse(text);
         if (res.ok) {
@@ -113,12 +117,11 @@ async function onManualUpdate() {
             toastr.warning('WorldTracker: could not parse tracker response (see console).');
         }
     } catch (err) {
-        if (controller.signal.aborted) { log('request aborted'); return; }
+        if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
         log('request error:', err);
         toastr.error(`WorldTracker request failed: ${err?.message || err}`);
     } finally {
-        if (updateInFlight === controller) updateInFlight = null;
-        setBusy(false);
+        if (updateJob === job) { updateJob = null; setBusy(false); }
     }
 }
 
@@ -218,6 +221,24 @@ function buildSettingsDrawer() {
                     <label for="wt-ctx-msgs">Messages of context</label>
                     <input type="number" id="wt-ctx-msgs" class="text_pole" min="1" max="40">
                 </div>
+                <div class="wt-setting-row">
+                    <label for="wt-answer-tok">Answer token budget</label>
+                    <input type="number" id="wt-answer-tok" class="text_pole" min="128" max="8192" step="128">
+                    <label for="wt-think-tok">Extra think budget</label>
+                    <input type="number" id="wt-think-tok" class="text_pole" min="0" max="16384" step="256">
+                    <small class="notes">Request max_tokens = answer + think. The extra think budget keeps a reasoning model from being cut off before it writes the JSON.</small>
+                </div>
+                <div class="wt-setting-row">
+                    <label for="wt-effort">Reasoning effort</label>
+                    <select id="wt-effort" class="text_pole">
+                        <option value="">Model default</option>
+                        <option value="minimal">Minimal</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                    <small class="notes">Sent as reasoning_effort. "Low" is usually plenty for extraction and much faster.</small>
+                </div>
                 <label class="checkbox_label">
                     <input type="checkbox" id="wt-auto-approve">
                     <span>Auto-approve all changes (skip review)</span>
@@ -246,6 +267,21 @@ function buildSettingsDrawer() {
         this.value = settings.includeLastXMessages;
         saveSettingsDebounced();
     });
+
+    const $answerTok = $('#wt-answer-tok').val(Number(settings.maxResponseTokens) || 1024);
+    const $thinkTok = $('#wt-think-tok').val(Number(settings.maxThinkTokens) || 0);
+    const $effort = $('#wt-effort').val(settings.reasoningEffort || '');
+    $answerTok.on('change', function () {
+        settings.maxResponseTokens = Math.max(128, Math.min(8192, Number(this.value) || 1024));
+        this.value = settings.maxResponseTokens;
+        saveSettingsDebounced();
+    });
+    $thinkTok.on('change', function () {
+        settings.maxThinkTokens = Math.max(0, Math.min(16384, Number(this.value) || 0));
+        this.value = settings.maxThinkTokens;
+        saveSettingsDebounced();
+    });
+    $effort.on('change', function () { settings.reasoningEffort = this.value; saveSettingsDebounced(); });
 
     $enabled.on('change', function () {
         settings.enabled = this.checked;

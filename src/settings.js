@@ -20,7 +20,11 @@ function defaultSettings() {
         autoMode: 'ai',             // 'off' | 'ai' | 'user' | 'both'
         debounceMs: 1200,
         includeLastXMessages: 6,
-        maxResponseTokens: 2048,
+        maxMessageChars: 1500,      // per-message cap when building the query
+        maxResponseTokens: 1024,    // budget for the JSON answer itself
+        maxThinkTokens: 3072,       // extra budget so a reasoning model doesn't
+                                    // get cut off before it writes the JSON
+        reasoningEffort: 'low',     // '' | 'minimal' | 'low' | 'medium' | 'high'
 
         // --- approval ---
         autoApprove: false,

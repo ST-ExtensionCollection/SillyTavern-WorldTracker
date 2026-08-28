@@ -26,18 +26,25 @@ function textFrom(out) {
  * @returns {Promise<string>} raw response text
  */
 export async function runTrackerRequest(messages, settings, ctx, signal) {
-    const maxTokens = Number(settings.maxResponseTokens) || 2048;
+    // Give a reasoning model room to think AND still write the JSON.
+    const answerTokens = Number(settings.maxResponseTokens) || 1024;
+    const thinkTokens = Math.max(0, Number(settings.maxThinkTokens) || 0);
+    const maxTokens = answerTokens + thinkTokens;
+
+    const override = {};
+    if (settings.reasoningEffort) override.reasoning_effort = settings.reasoningEffort;
+
     const profiles = listProfiles(ctx);
     const profile = settings.profileId && profiles.find((p) => p.id === settings.profileId);
 
     if (profile && ctx.ConnectionManagerRequestService) {
-        log(`request via connection profile "${profile.name}"`);
+        log(`request via connection profile "${profile.name}" (max_tokens ${maxTokens}, effort ${settings.reasoningEffort || 'default'})`);
         const out = await ctx.ConnectionManagerRequestService.sendRequest(
             profile.id,
             messages,
             maxTokens,
             { extractData: true, signal, includePreset: false, includeInstruct: false },
-            {},
+            override,
         );
         return textFrom(out);
     }

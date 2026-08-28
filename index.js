@@ -125,10 +125,14 @@ async function onManualUpdate(opts = {}) {
     const recent = chat.slice(-n).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
     const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName });
 
+    // Snapshot the pre-query state so a later swipe/regen/delete of this
+    // message can revert cleanly (milestone 7).
+    state.snapshot(st, srcId);
+
     const job = { controller: new AbortController(), superseded: false };
     updateJob = job;
     setBusy(true);
-    log(`tracker request: ${recent.length} msg(s), ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
+    log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
 
     try {
         const text = await runTrackerRequest(messages, settings, c, job.controller.signal);
@@ -480,6 +484,21 @@ jQuery(async () => {
     eventSource.on(event_types.USER_MESSAGE_RENDERED, (id) => {
         if (['user', 'both'].includes(settings.autoMode)) autoUpdate('user message', id);
     });
+
+    // --- swipe / regen / delete safety: revert to the pre-query snapshot ---
+    const onRevert = (id, why) => {
+        const st = getState();
+        if (!st || !Number.isInteger(id)) return;
+        stopUpdate('revert');
+        const restored = state.restoreFrom(st, id);
+        log(`revert @${id} (${why}) -> ${restored ? 'snapshot restored' : 'no snapshot, pending pruned'}`);
+        refresh();
+    };
+    eventSource.on(event_types.MESSAGE_SWIPED, (id) => onRevert(id, 'swiped'));
+    eventSource.on(event_types.MESSAGE_DELETED, (id) => onRevert(id, 'deleted'));
+    if (event_types.MESSAGE_SWIPE_DELETED) {
+        eventSource.on(event_types.MESSAGE_SWIPE_DELETED, (id) => onRevert(id, 'swipe-deleted'));
+    }
 
     // The chat layout (#sheld) and sibling extensions like TopInfoBar may not be
     // in the DOM yet when we boot. Re-place the banner once things settle.

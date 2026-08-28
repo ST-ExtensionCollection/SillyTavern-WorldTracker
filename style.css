@@ -13,7 +13,9 @@
 #wt-root,
 #wt-root *,
 #wt-bar,
-#wt-bar * {
+#wt-bar *,
+#wt-inline,
+#wt-inline * {
     box-sizing: border-box;
 }
 
@@ -28,10 +30,40 @@ body #sheld.wt-flexpatch #chat {
     flex-grow: 1;
 }
 
-/* ---------------- Banner (in-flow row inside #sheld) ---------------- */
+/* ---------------- Banner: inline row inside #extensionTopBar ---------------- */
+
+/* No background of its own — it shows TopInfoBar's tint through, so the theme's
+   hover/opacity on #extensionTopBar applies to us for free. */
+#wt-inline {
+    flex-basis: 100%;
+    width: 100%;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    /* cancel #extensionTopBar's 0 10px padding so the row spans edge to edge */
+    margin: 0 -10px;
+    padding: 0 10px;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    color: var(--wt-fg);
+    font-size: calc(var(--mainFontSize, 15px) * 0.9);
+}
+
+/* Let TopInfoBar grow for our wrapped row and lift the whole bar above #chat
+   so our dropdown sheet is not painted behind messages. */
+body #sheld #extensionTopBar:has(#wt-inline) {
+    position: relative;
+    z-index: 30;
+    height: auto;
+    min-height: var(--bottomFormBlockSize);
+    align-content: flex-start;
+}
+
+/* ---------------- Banner: standalone row (no TopInfoBar) ---------------- */
 
 .wt-bar {
     position: relative;
+    z-index: 30;
     width: 100%;
     flex-shrink: 0;
     display: flex;
@@ -42,12 +74,6 @@ body #sheld.wt-flexpatch #chat {
     border: 1px solid var(--wt-border);
     border-radius: 0 0 10px 10px;
     font-size: calc(var(--mainFontSize, 15px) * 0.9);
-}
-
-/* Sits directly below TopInfoBar's row — drop the shared edge. */
-.wt-bar.wt-under-tib {
-    border-top: none;
-    margin-top: -1px;
 }
 
 /* Layout not found — last-resort fixed strip so the UI is still reachable. */
@@ -159,16 +185,17 @@ body #sheld.wt-flexpatch #chat {
     left: 0;
     right: 0;
     top: 100%;
-    z-index: 5;
+    z-index: 40;
     max-height: 46vh;
     overflow-y: auto;
     color: var(--wt-fg);
     background-color: var(--SmartThemeBlurTintColor);
-    backdrop-filter: blur(var(--SmartThemeBlurStrength, 8px));
+    background-image: linear-gradient(var(--black30a, rgba(0, 0, 0, 0.3)), var(--black30a, rgba(0, 0, 0, 0.3)));
+    backdrop-filter: blur(calc(var(--SmartThemeBlurStrength, 8px) * 1.5));
     border: 1px solid var(--wt-border);
     border-top: none;
     border-radius: 0 0 10px 10px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
     padding: 0.5rem 0.75rem 0.75rem;
 }
 

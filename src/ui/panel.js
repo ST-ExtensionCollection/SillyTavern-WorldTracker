@@ -10,6 +10,7 @@ import * as clock from '../clock.js';
 
 const ROOT_ID = 'wt-root';
 const BAR_ID = 'wt-bar';
+const INLINE_ID = 'wt-inline';
 
 let cfg = null; // { context, settings, getState, handlers }
 
@@ -20,7 +21,18 @@ export function initPanel(config) {
 export function destroyPanel() {
     $(`#${ROOT_ID}`).remove();
     $(`#${BAR_ID}`).remove();
+    $(`#${INLINE_ID}`).remove();
     $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right');
+}
+
+/** True when a character/group chat is open. Nothing to track otherwise. */
+function chatActive() {
+    try {
+        const id = cfg.context.getCurrentChatId?.();
+        return id !== undefined && id !== null && id !== '';
+    } catch {
+        return true; // if we can't tell, don't hide
+    }
 }
 
 /**
@@ -33,17 +45,19 @@ function patchSheld(sheld) {
 }
 
 /**
- * Find where our in-flow bar belongs inside #sheld: directly after
- * TopInfoBar's #extensionTopBar when present, otherwise as the first row
- * before #chat. Returns { sheld, before } or null if the layout isn't there.
+ * Decide how to mount the banner:
+ *  - 'inline' : append a wrapped full-width row INSIDE TopInfoBar's
+ *    #extensionTopBar so it inherits that bar's tint / blur / hover exactly.
+ *  - 'sibling': our own #wt-bar row inside #sheld before #chat.
+ *  - null     : expected layout not present -> caller uses fixed fallback.
  */
 function barAnchor() {
     const sheld = document.getElementById('sheld');
     const chatEl = document.getElementById('chat');
     if (!sheld || !chatEl || chatEl.parentElement !== sheld) return null;
     const tib = document.getElementById('extensionTopBar');
-    const before = (tib && tib.parentElement === sheld) ? tib.nextSibling : chatEl;
-    return { sheld, before, underTib: !!(tib && tib.parentElement === sheld) };
+    if (tib && tib.parentElement === sheld) return { mode: 'inline', sheld, tib };
+    return { mode: 'sibling', sheld, before: chatEl };
 }
 
 /** Full rebuild from current state + settings. Safe to call often. */
@@ -174,31 +188,39 @@ function buildToolbar() {
 // ---------------------------------------------------------------------------
 
 function renderBanner() {
-    const state = cfg.getState();
     const { settings, handlers } = cfg;
-    const pendingCount = state ? state.pending.length : 0;
+
+    // Nothing to track outside a chat — render nothing at all.
+    if (!chatActive()) return;
+
+    const state = cfg.getState();
+    if (!state) return;
+    const pendingCount = state.pending.length;
     const expanded = !!settings.bannerExpanded;
 
     const anchor = barAnchor();
     if (anchor) patchSheld(anchor.sheld);
-    // In-flow bar inside #sheld (centres with the chat column, like TopInfoBar).
-    // Falls back to a fixed strip on <body> if the expected layout isn't found.
-    const $root = anchor
-        ? $(`<div id="${BAR_ID}" class="wt-bar${anchor.underTib ? ' wt-under-tib' : ''}${expanded ? ' wt-expanded' : ''}"></div>`)
-        : $(`<div id="${ROOT_ID}" class="wt-bar wt-bar-floating${expanded ? ' wt-expanded' : ''}"></div>`);
+
+    // inline  -> wrapped full-width row inside #extensionTopBar (inherits its look)
+    // sibling -> our own #wt-bar row inside #sheld
+    // null    -> fixed fallback strip on <body>
+    let $root;
+    if (anchor && anchor.mode === 'inline') {
+        $root = $(`<div id="${INLINE_ID}" class="wt-inline${expanded ? ' wt-expanded' : ''}"></div>`);
+    } else if (anchor && anchor.mode === 'sibling') {
+        $root = $(`<div id="${BAR_ID}" class="wt-bar${expanded ? ' wt-expanded' : ''}"></div>`);
+    } else {
+        $root = $(`<div id="${ROOT_ID}" class="wt-bar wt-bar-floating${expanded ? ' wt-expanded' : ''}"></div>`);
+    }
 
     // chip strip
     const $strip = $('<div class="wt-strip"></div>');
-    if (state) {
-        $strip.append(chip('clock', 'Time', displayValue('clock', state.clock, state), state.clock.locked));
-        for (const [key, f] of Object.entries(state.world)) {
-            $strip.append(chip(`world.${key}`, key, displayValue(`world.${key}`, f, state), f.locked));
-        }
-        for (const [key, f] of Object.entries(state.userStats)) {
-            $strip.append(chip(`userStats.${key}`, key, displayValue(`userStats.${key}`, f, state), f.locked));
-        }
-    } else {
-        $strip.append('<span class="wt-chip wt-empty">WorldTracker — no active chat</span>');
+    $strip.append(chip('clock', 'Time', displayValue('clock', state.clock, state), state.clock.locked));
+    for (const [key, f] of Object.entries(state.world)) {
+        $strip.append(chip(`world.${key}`, key, displayValue(`world.${key}`, f, state), f.locked));
+    }
+    for (const [key, f] of Object.entries(state.userStats)) {
+        $strip.append(chip(`userStats.${key}`, key, displayValue(`userStats.${key}`, f, state), f.locked));
     }
 
     const $right = $('<div class="wt-strip-right"></div>');
@@ -217,7 +239,8 @@ function renderBanner() {
         $root.append($('<div class="wt-sheet"></div>').append(buildDetailBody()));
     }
 
-    if (anchor) anchor.sheld.insertBefore($root[0], anchor.before);
+    if (anchor && anchor.mode === 'inline') anchor.tib.appendChild($root[0]);
+    else if (anchor && anchor.mode === 'sibling') anchor.sheld.insertBefore($root[0], anchor.before);
     else $('body').append($root);
 }
 

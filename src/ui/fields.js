@@ -37,7 +37,13 @@ export function fieldRow(path, field, state, opts = {}) {
 
         if (isClock) {
             const cur16 = toIso(state.clock.iso).slice(0, 16); // YYYY-MM-DDTHH:mm
-            const exp = state.clock.expectedInterval || { days: 0, hours: 0, minutes: 0 };
+            const exp = state.clock.expectedInterval || { days: 0, hours: 0, minutes: 0, seconds: 0 };
+            const presets = Array.isArray(state.clock.intervalPresets) ? state.clock.intervalPresets : [];
+            const dhms = (cls, src) => `
+                <input type="number" class="${INP} ${cls}-d" min="0" placeholder="d" value="${src && src.days || ''}">
+                <input type="number" class="${INP} ${cls}-h" min="0" placeholder="h" value="${src && src.hours || ''}">
+                <input type="number" class="${INP} ${cls}-m" min="0" placeholder="m" value="${src && src.minutes || ''}">
+                <input type="number" class="${INP} ${cls}-s" min="0" placeholder="s" value="${src && src.seconds || ''}">`;
             $editor = $(`
                 <div class="wt-field-editor wt-clock-editor">
                     <div class="wt-clock-line">
@@ -46,16 +52,14 @@ export function fieldRow(path, field, state, opts = {}) {
                     </div>
                     <div class="wt-clock-line">
                         <label>Advance</label>
-                        <input type="number" class="${INP} wt-clock-d" min="0" placeholder="d">
-                        <input type="number" class="${INP} wt-clock-h" min="0" placeholder="h">
-                        <input type="number" class="${INP} wt-clock-m" min="0" placeholder="m">
+                        ${dhms('wt-adv', null)}
                     </div>
                     <div class="wt-clock-line">
                         <label title="Fallback time to add if you reject the model's reported elapsed">Expected next</label>
-                        <input type="number" class="${INP} wt-exp-d" min="0" placeholder="d" value="${exp.days || ''}">
-                        <input type="number" class="${INP} wt-exp-h" min="0" placeholder="h" value="${exp.hours || ''}">
-                        <input type="number" class="${INP} wt-exp-m" min="0" placeholder="m" value="${exp.minutes || ''}">
+                        ${dhms('wt-exp', exp)}
                     </div>
+                    ${presets.length ? `<div class="wt-clock-line wt-clock-presets">${presets.map((p, i) =>
+                        `<button class="${BTN} wt-preset" data-i="${i}">${esc(p.name)}</button>`).join('')}</div>` : ''}
                     <div class="wt-clock-line wt-clock-actions">
                         <button class="${BTN} wt-edit-ok"><i class="fa-solid fa-check"></i> Apply</button>
                         <button class="${BTN} wt-edit-cancel"><i class="fa-solid fa-xmark"></i></button>
@@ -64,14 +68,27 @@ export function fieldRow(path, field, state, opts = {}) {
             `);
             $value.hide().after($editor);
             $editor.find('.wt-clock-abs').trigger('focus');
-            $editor.find('.wt-edit-ok').on('click', () => {
-                const num = (sel) => Number($editor.find(sel).val()) || 0;
-                const expected = { days: num('.wt-exp-d'), hours: num('.wt-exp-h'), minutes: num('.wt-exp-m') };
-                onEdit && onEdit(path, { __expected: expected });
 
-                const advance = { days: num('.wt-clock-d'), hours: num('.wt-clock-h'), minutes: num('.wt-clock-m') };
+            $editor.find('.wt-preset').on('click', function () {
+                const p = presets[Number($(this).data('i'))] || {};
+                $editor.find('.wt-exp-d').val(p.days || '');
+                $editor.find('.wt-exp-h').val(p.hours || '');
+                $editor.find('.wt-exp-m').val(p.minutes || '');
+                $editor.find('.wt-exp-s').val(p.seconds || '');
+            });
+
+            $editor.find('.wt-edit-ok').on('click', () => {
+                const grab = (cls) => ({
+                    days: Number($editor.find(`.${cls}-d`).val()) || 0,
+                    hours: Number($editor.find(`.${cls}-h`).val()) || 0,
+                    minutes: Number($editor.find(`.${cls}-m`).val()) || 0,
+                    seconds: Number($editor.find(`.${cls}-s`).val()) || 0,
+                });
+                onEdit && onEdit(path, { __expected: grab('wt-exp') });
+
+                const advance = grab('wt-adv');
                 const abs = String($editor.find('.wt-clock-abs').val() || '');
-                if (advance.days || advance.hours || advance.minutes) {
+                if (advance.days || advance.hours || advance.minutes || advance.seconds) {
                     onEdit && onEdit(path, { __elapsed: advance });
                 } else if (abs && abs.slice(0, 16) !== toIso(state.clock.iso).slice(0, 16)) {
                     onEdit && onEdit(path, { __setIso: abs });

@@ -48,7 +48,8 @@ function seedFromSchema(schema) {
             iso: s.clock?.startIso ?? '2024-06-01T09:00:00',
             displayFormat: s.clock?.displayFormat ?? 'HH:mm — EEE, MMM d yyyy',
             locked: !!s.clock?.lockedByDefault,
-            expectedInterval: { ...(s.clock?.expectedInterval ?? { days: 0, hours: 0, minutes: 10 }) },
+            expectedInterval: { days: 0, hours: 0, minutes: 1, seconds: 0, ...(s.clock?.expectedInterval ?? {}) },
+            intervalPresets: (s.clock?.intervalPresets ?? []).map((p) => ({ ...p })),
         },
         world: {},
         userStats: {},
@@ -80,8 +81,12 @@ function seedFromSchema(schema) {
 function reconcile(state, schema) {
     const s = schema ?? defaultSchema();
     if (!state.clock) state.clock = seedFromSchema(s).clock;
-    if (!state.clock.expectedInterval) {
-        state.clock.expectedInterval = { ...(s.clock?.expectedInterval ?? { days: 0, hours: 0, minutes: 10 }) };
+    state.clock.expectedInterval = {
+        days: 0, hours: 0, minutes: 1, seconds: 0,
+        ...(state.clock.expectedInterval ?? s.clock?.expectedInterval ?? {}),
+    };
+    if (!Array.isArray(state.clock.intervalPresets) || !state.clock.intervalPresets.length) {
+        state.clock.intervalPresets = (s.clock?.intervalPresets ?? []).map((p) => ({ ...p }));
     }
     if (!state.world) state.world = {};
     if (!state.userStats) state.userStats = {};

@@ -30,7 +30,15 @@ export function defaultSchema() {
             lockedByDefault: false,
             // How much in-world time you expect the next reply to cover. Used as
             // the fallback elapsed when you reject the model's reported elapsed.
-            expectedInterval: { days: 0, hours: 0, minutes: 10 },
+            // Back-and-forth dialogue is usually seconds, so keep this small.
+            expectedInterval: { days: 0, hours: 0, minutes: 1, seconds: 0 },
+            // One-click pace presets that fill the expected-interval fields.
+            intervalPresets: [
+                { name: 'Conversational', days: 0, hours: 0, minutes: 0, seconds: 30 },
+                { name: 'Fighting', days: 0, hours: 0, minutes: 0, seconds: 6 },
+                { name: 'Classes', days: 0, hours: 0, minutes: 45, seconds: 0 },
+                { name: 'Narration', days: 0, hours: 0, minutes: 10, seconds: 0 },
+            ],
         },
 
         // Scene-level fields shown in the banner and detail sheet.

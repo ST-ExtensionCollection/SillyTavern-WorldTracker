@@ -295,23 +295,33 @@ body:has(#wt-inline) #extensionTopBar {
 .wt-clock-line {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.3rem;
 }
 
 .wt-clock-line > label {
-    min-width: 6rem;
+    flex: 0 0 6rem;
     opacity: 0.8;
     font-size: 0.85em;
 }
 
 .wt-clock-line .wt-clock-abs {
     flex: 1;
-    min-width: 10rem;
+    min-width: 9rem;
 }
 
 .wt-clock-line input[type="number"] {
-    width: 3.2rem;
+    width: 3rem;
     text-align: center;
+}
+
+.wt-clock-presets {
+    padding-left: 6.3rem;
+}
+
+.wt-clock-presets .wt-preset {
+    font-size: 0.8em;
+    opacity: 0.9;
 }
 
 .wt-clock-actions {

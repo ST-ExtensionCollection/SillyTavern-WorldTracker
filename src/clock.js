@@ -35,16 +35,25 @@ export function toIso(date) {
 }
 
 /**
- * Add an elapsed delta to an ISO string. delta = { days, hours, minutes } (any
- * missing/negative-safe). Returns a new ISO string.
+ * Add an elapsed delta to an ISO string. delta = { days, hours, minutes,
+ * seconds } (any missing/negative-safe). Returns a new ISO string.
  */
 export function addElapsed(iso, delta) {
     const d = parseIso(iso);
     const days = Math.max(0, Number(delta?.days) || 0);
     const hours = Math.max(0, Number(delta?.hours) || 0);
     const minutes = Math.max(0, Number(delta?.minutes) || 0);
-    d.setMinutes(d.getMinutes() + minutes + hours * 60 + days * 24 * 60);
+    const seconds = Math.max(0, Number(delta?.seconds) || 0);
+    d.setSeconds(d.getSeconds() + seconds + minutes * 60 + hours * 3600 + days * 86400);
     return toIso(d);
+}
+
+/** Total seconds represented by a { days, hours, minutes, seconds } delta. */
+export function deltaToSeconds(delta) {
+    return (Math.max(0, Number(delta?.days) || 0) * 86400)
+        + (Math.max(0, Number(delta?.hours) || 0) * 3600)
+        + (Math.max(0, Number(delta?.minutes) || 0) * 60)
+        + Math.max(0, Number(delta?.seconds) || 0);
 }
 
 /**
@@ -92,16 +101,17 @@ export function format(iso, pattern) {
     });
 }
 
-/** Short human diff between two ISO strings, e.g. "+2h 15m". '' if equal/backwards. */
+/** Short human diff between two ISO strings, e.g. "+2h 15m" or "+30s". '' if equal/backwards. */
 export function humanDelta(fromIso, toIso_) {
-    let ms = parseIso(toIso_).getTime() - parseIso(fromIso).getTime();
-    if (ms <= 0) return '';
-    let mins = Math.round(ms / 60000);
-    const days = Math.floor(mins / 1440); mins -= days * 1440;
-    const hours = Math.floor(mins / 60); mins -= hours * 60;
+    let secs = Math.round((parseIso(toIso_).getTime() - parseIso(fromIso).getTime()) / 1000);
+    if (secs <= 0) return '';
+    const days = Math.floor(secs / 86400); secs -= days * 86400;
+    const hours = Math.floor(secs / 3600); secs -= hours * 3600;
+    const mins = Math.floor(secs / 60); secs -= mins * 60;
     const parts = [];
     if (days) parts.push(`${days}d`);
     if (hours) parts.push(`${hours}h`);
     if (mins) parts.push(`${mins}m`);
+    if (secs) parts.push(`${secs}s`);
     return parts.length ? `+${parts.join(' ')}` : '';
 }

@@ -45,6 +45,7 @@ function onEdit(path, val) {
                 days: Math.max(0, Number(val.__expected.days) || 0),
                 hours: Math.max(0, Number(val.__expected.hours) || 0),
                 minutes: Math.max(0, Number(val.__expected.minutes) || 0),
+                seconds: Math.max(0, Number(val.__expected.seconds) || 0),
             };
         }
         if (val.__elapsed) {

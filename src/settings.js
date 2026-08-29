@@ -25,6 +25,8 @@ function defaultSettings() {
         maxThinkTokens: 3072,       // extra budget so a reasoning model doesn't
                                     // get cut off before it writes the JSON
         reasoningEffort: 'low',     // '' | 'minimal' | 'low' | 'medium' | 'high'
+        structuredOutput: true,     // pass a json_schema to force valid JSON
+        debug: false,               // verbose console logging
 
         // --- approval ---
         autoApprove: false,

@@ -14,8 +14,10 @@ export function listProfiles(ctx) {
 function textFrom(out) {
     if (out == null) return '';
     if (typeof out === 'string') return out;
-    return out.content ?? out.text ?? out.message?.content
+    const c = out.content ?? out.text ?? out.message?.content
         ?? out.choices?.[0]?.message?.content ?? out.choices?.[0]?.text ?? '';
+    // With json_schema, ST may hand back an already-parsed object.
+    return typeof c === 'object' ? JSON.stringify(c) : c;
 }
 
 /**
@@ -23,9 +25,10 @@ function textFrom(out) {
  * @param {object} settings
  * @param {object} ctx  SillyTavern context
  * @param {AbortSignal} [signal]
+ * @param {object} [schema]  JSON Schema for structured output
  * @returns {Promise<string>} raw response text
  */
-export async function runTrackerRequest(messages, settings, ctx, signal) {
+export async function runTrackerRequest(messages, settings, ctx, signal, schema) {
     // Give a reasoning model room to think AND still write the JSON.
     const answerTokens = Number(settings.maxResponseTokens) || 1024;
     const thinkTokens = Math.max(0, Number(settings.maxThinkTokens) || 0);
@@ -33,6 +36,9 @@ export async function runTrackerRequest(messages, settings, ctx, signal) {
 
     const override = {};
     if (settings.reasoningEffort) override.reasoning_effort = settings.reasoningEffort;
+    if (settings.structuredOutput && schema) {
+        override.json_schema = { name: 'WorldTrackerState', strict: false, value: schema };
+    }
 
     const profiles = listProfiles(ctx);
     const profile = settings.profileId && profiles.find((p) => p.id === settings.profileId);
@@ -75,6 +81,7 @@ export async function runTrackerRequest(messages, settings, ctx, signal) {
             prompt: userMsg || flat,
             systemPrompt: sysMsg,
             responseLength: maxTokens,
+            jsonSchema: (settings.structuredOutput && schema) ? schema : null,
         });
     }
 

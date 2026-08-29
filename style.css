@@ -613,6 +613,13 @@ body:has(#wt-inline) #extensionTopBar {
     gap: 0.2rem;
 }
 
+.wt-settings .wt-ta {
+    width: 100%;
+    resize: vertical;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+}
+
 /* Collapsed float: header only. */
 .wt-float.wt-collapsed {
     height: auto !important;

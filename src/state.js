@@ -19,7 +19,7 @@
 //   }
 
 import { defaultSchema, UPDATER_NARRATOR } from './schema.js';
-import { log, warn } from './log.js';
+import { vlog, warn } from './log.js';
 
 export const META_KEY = 'WorldTracker';
 const STATE_VERSION = 1;
@@ -127,7 +127,7 @@ export function get(schema) {
     if (!m[META_KEY] || typeof m[META_KEY] !== 'object') {
         m[META_KEY] = seedFromSchema(schema);
         save();
-        log(`seeded fresh state for chat (chars: 0)`);
+        vlog(`seeded fresh state for chat (chars: 0)`);
     } else {
         reconcile(m[META_KEY], schema);
     }
@@ -155,7 +155,7 @@ export function snapshot(st, index) {
     // Trim to the most recent SNAPSHOT_CAP indices.
     const keys = Object.keys(st.snapshots).map(Number).sort((a, b) => a - b);
     while (keys.length > SNAPSHOT_CAP) delete st.snapshots[keys.shift()];
-    log(`snapshot #${index} saved; snapshots: [${Object.keys(st.snapshots).join(',')}]`);
+    vlog(`snapshot #${index} saved; snapshots: [${Object.keys(st.snapshots).join(',')}]`);
     save();
 }
 
@@ -185,7 +185,7 @@ export function restoreFrom(st, index) {
     st.pending = (st.pending || []).filter((p) => !(Number.isInteger(p.sourceMessageId) && p.sourceMessageId >= index));
     result.prunedPending = before - st.pending.length;
 
-    log(`restoreFrom(${index}): all snapshot keys were [${Object.keys(st.snapshots).join(',')}], used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps`);
+    vlog(`restoreFrom(${index}): all snapshot keys were [${Object.keys(st.snapshots).join(',')}], used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps`);
     save();
     return result;
 }

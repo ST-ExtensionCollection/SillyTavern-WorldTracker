@@ -4,7 +4,7 @@
 
 import { format } from './clock.js';
 import { fmtNum } from './ui/format.js';
-import { log } from './log.js';
+import { vlog } from './log.js';
 
 const KEY = 'worldtracker-state';
 const IN_CHAT = 1;   // extension_prompt_types.IN_CHAT
@@ -45,5 +45,5 @@ export function updateInjection(ctx, st, settings) {
     const text = enabled ? buildSummary(st) : '';
     const depth = Math.max(0, Number(settings?.injectionDepth) || 0);
     ctx.setExtensionPrompt(KEY, text, IN_CHAT, depth, false, SYSTEM);
-    log(text ? `injected world state (${text.length} chars, depth ${depth})` : 'cleared world-state injection');
+    vlog(text ? `injected world state (${text.length} chars, depth ${depth})` : 'cleared world-state injection');
 }

@@ -77,6 +77,47 @@ function constraintNotes(state) {
     return notes;
 }
 
+/** JSON Schema describing the response shape (unlocked fields only). */
+export function buildResponseSchema(state) {
+    const props = {};
+    if (state.clock && !state.clock.locked) {
+        props.clock = {
+            type: 'object',
+            properties: {
+                elapsed: {
+                    type: 'object',
+                    properties: {
+                        days: { type: 'integer' }, hours: { type: 'integer' },
+                        minutes: { type: 'integer' }, seconds: { type: 'integer' },
+                    },
+                },
+            },
+        };
+    }
+    const objOf = (entries, propFn) => {
+        const p = {};
+        for (const [k, f] of entries) if (!f.locked) p[k] = propFn(f);
+        return Object.keys(p).length ? { type: 'object', properties: p } : null;
+    };
+    const worldP = objOf(Object.entries(state.world), (f) => (f.type === 'number' ? { type: 'number' } : { type: 'string' }));
+    if (worldP) props.world = worldP;
+    const usP = objOf(Object.entries(state.userStats), () => ({ type: 'number' }));
+    if (usP) props.userStats = usP;
+    const names = Object.keys(state.characters);
+    if (names.length) {
+        const cp = {};
+        for (const name of names) {
+            const fp = objOf(Object.entries(state.characters[name].fields), (ff) => (
+                ff.type === 'enum' && Array.isArray(ff.options) ? { type: 'string', enum: ff.options }
+                    : ff.type === 'number' ? { type: 'number' } : { type: 'string' }
+            ));
+            if (fp) cp[name] = fp;
+        }
+        if (Object.keys(cp).length) props.characters = { type: 'object', properties: cp };
+    }
+    return { type: 'object', properties: props };
+}
+
 /**
  * A character is "in scope" this turn if its updater is the narrator, or if it
  * is 'self' and it authored the triggering message, or a specific name that

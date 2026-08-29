@@ -4,8 +4,8 @@
 import { loadSettings, MODULE_NAME } from './src/settings.js';
 import * as state from './src/state.js';
 import * as clockUtil from './src/clock.js';
-import { log } from './src/log.js';
-import { buildTrackerPrompt } from './src/prompt.js';
+import { log, vlog, setVerbose } from './src/log.js';
+import { buildTrackerPrompt, buildResponseSchema } from './src/prompt.js';
 import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
 import { diffToProposals, applyProposal } from './src/merge.js';
@@ -57,12 +57,12 @@ function onEdit(path, val) {
             st.clock.iso = clockUtil.toIso(val.__setIso);
         }
         state.save();
-        log(`clock ->`, st.clock.iso, val.__expected ? `(expected ${JSON.stringify(st.clock.expectedInterval)})` : '');
+        vlog(`clock ->`, st.clock.iso, val.__expected ? `(expected ${JSON.stringify(st.clock.expectedInterval)})` : '');
         refresh();
         return;
     }
     state.applyValue(st, path, val, null);
-    log(`edit ${path} ->`, val);
+    vlog(`edit ${path} ->`, val);
     refresh();
 }
 
@@ -70,7 +70,7 @@ function onToggleLock(path, locked) {
     const st = getState();
     if (!st) return;
     state.setLock(st, path, locked);
-    log(`${locked ? 'lock' : 'unlock'} ${path}`);
+    vlog(`${locked ? 'lock' : 'unlock'} ${path}`);
     refresh();
 }
 
@@ -151,9 +151,10 @@ async function onManualUpdate(opts = {}) {
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
 
     try {
-        const text = await runTrackerRequest(messages, settings, c, job.controller.signal);
+        const schema = settings.structuredOutput ? buildResponseSchema(st) : null;
+        const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
         if (job.superseded) { log('response ignored (superseded)'); return; }
-        log('tracker response (first 500):', String(text || '').slice(0, 500));
+        vlog('tracker response (first 500):', String(text || '').slice(0, 500));
         const res = parseTrackerResponse(text);
         if (!res.ok) {
             log('parse FAILED. data:', res.data, 'raw:', res.raw);
@@ -348,6 +349,21 @@ function buildSettingsDrawer() {
                     <input type="checkbox" id="wt-auto-approve">
                     <span>Auto-approve all changes (skip review)</span>
                 </label>
+                <label class="checkbox_label">
+                    <input type="checkbox" id="wt-structured">
+                    <span>Request structured JSON output (json_schema)</span>
+                </label>
+                <label class="checkbox_label">
+                    <input type="checkbox" id="wt-debug">
+                    <span>Verbose console logging</span>
+                </label>
+                <div class="wt-setting-row">
+                    <label for="wt-sys-override">System prompt override</label>
+                    <textarea id="wt-sys-override" class="text_pole wt-ta" rows="3" placeholder="(default)"></textarea>
+                    <label for="wt-instr-override">Extra instruction</label>
+                    <textarea id="wt-instr-override" class="text_pole wt-ta" rows="2" placeholder="(none) — appended to the query"></textarea>
+                    <small class="notes">Leave blank for defaults. The query already contains the state block, constraints and recent messages.</small>
+                </div>
             </div>
         </div>`;
     $('#extensions_settings2').append(html);
@@ -366,7 +382,7 @@ function buildSettingsDrawer() {
         $profile.val(settings.profileId || '');
     }
     fillProfiles();
-    $profile.on('change', function () { settings.profileId = this.value; saveSettingsDebounced(); log('profile ->', this.value || '(main API)'); });
+    $profile.on('change', function () { settings.profileId = this.value; saveSettingsDebounced(); vlog('profile ->', this.value || '(main API)'); });
     $ctxMsgs.on('change', function () {
         settings.includeLastXMessages = Math.max(1, Math.min(40, Number(this.value) || 6));
         this.value = settings.includeLastXMessages;
@@ -406,6 +422,17 @@ function buildSettingsDrawer() {
     $locks.on('change', function () { settings.showLockIcons = this.checked; saveSettingsDebounced(); refresh(); });
     $auto.on('change', function () { settings.autoMode = this.value; saveSettingsDebounced(); });
     $approve.on('change', function () { settings.autoApprove = this.checked; saveSettingsDebounced(); });
+
+    $('#wt-structured').prop('checked', settings.structuredOutput !== false)
+        .on('change', function () { settings.structuredOutput = this.checked; saveSettingsDebounced(); });
+    $('#wt-debug').prop('checked', !!settings.debug)
+        .on('change', function () { settings.debug = this.checked; setVerbose(this.checked); saveSettingsDebounced(); });
+
+    if (!settings.promptOverrides) settings.promptOverrides = {};
+    $('#wt-sys-override').val(settings.promptOverrides.system || '')
+        .on('change', function () { settings.promptOverrides.system = this.value.trim(); saveSettingsDebounced(); });
+    $('#wt-instr-override').val(settings.promptOverrides.instruction || '')
+        .on('change', function () { settings.promptOverrides.instruction = this.value.trim(); saveSettingsDebounced(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +459,7 @@ function registerSlashCommands() {
             if (!st || !name) return '';
             if (op === 'add') state.ensureCharacter(st, name, settings.schema);
             else if (op === 'remove') state.removeCharacter(st, name);
-            log(`/wt-char ${op} ${name} -> now tracking ${Object.keys(st.characters).length}`);
+            vlog(`/wt-char ${op} ${name} -> now tracking ${Object.keys(st.characters).length}`);
             refresh();
             return '';
         },
@@ -454,6 +481,7 @@ function registerSlashCommands() {
 
 jQuery(async () => {
     settings = loadSettings(extensionSettings);
+    setVerbose(!!settings.debug);
     state.init();
 
     initPanel({ context: ctx, settings, getState, handlers: {
@@ -468,7 +496,7 @@ jQuery(async () => {
     eventSource.on(event_types.CHAT_CHANGED, () => {
         let id;
         try { id = ctx.getCurrentChatId?.(); } catch { /* ignore */ }
-        log(`chat changed -> ${id ?? '(none)'}`);
+        vlog(`chat changed -> ${id ?? '(none)'}`);
         stopUpdate('chat-changed'); // don't apply another chat's tracker result here
         state.get(settings.schema); // seed/reconcile for the new chat
         refresh();
@@ -481,7 +509,7 @@ jQuery(async () => {
         clearTimeout(autoTimer);
         autoTimer = setTimeout(() => {
             if (!settings.enabled || genActive || updateJob) {
-                log(`auto-update skipped (${why}): enabled=${settings.enabled} genActive=${genActive} inFlight=${!!updateJob}`);
+                vlog(`auto-update skipped (${why}): enabled=${settings.enabled} genActive=${genActive} inFlight=${!!updateJob}`);
                 return;
             }
             if (!getState()) return;
@@ -506,9 +534,9 @@ jQuery(async () => {
     // chat.length (i.e. the index of the removed tail message).
     const onRevert = (rawId, why) => {
         const id = Number(rawId);
-        log(`revert event: ${why}, rawId=${JSON.stringify(rawId)} -> ${id}`);
+        vlog(`revert event: ${why}, rawId=${JSON.stringify(rawId)} -> ${id}`);
         const st = getState();
-        if (!st || !Number.isFinite(id)) { log('revert: no state or bad id'); return; }
+        if (!st || !Number.isFinite(id)) { vlog('revert: no state or bad id'); return; }
         stopUpdate('revert');
         const r = state.restoreFrom(st, id);
         log(`revert @${id} (${why}): restored=${r.restored} usedKey=${r.usedKey} pruned=${r.prunedPending} pending`);

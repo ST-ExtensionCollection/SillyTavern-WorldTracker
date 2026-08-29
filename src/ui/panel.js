@@ -7,7 +7,7 @@
 import { fieldRow } from './fields.js';
 import { displayValue, esc, iconFor } from './format.js';
 import { makeDraggable, makeResizable } from './drag.js';
-import { log } from '../log.js';
+import { vlog } from '../log.js';
 
 const ROOT_ID = 'wt-root';
 const BAR_ID = 'wt-bar';
@@ -376,7 +376,7 @@ function renderBanner() {
     setTimeout(reflow, 250);
     setTimeout(reflow, 900);
 
-    log(`banner rendered (${anchor ? anchor.mode : 'fixed-fallback'}), ${Object.keys(state.characters).length} character(s), ${pendingCount} pending`);
+    vlog(`banner rendered (${anchor ? anchor.mode : 'fixed-fallback'}), ${Object.keys(state.characters).length} character(s), ${pendingCount} pending`);
 }
 
 /** Re-run banner placement (e.g. if TopInfoBar mounted after us). */

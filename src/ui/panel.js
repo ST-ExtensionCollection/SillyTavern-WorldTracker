@@ -238,19 +238,22 @@ function buildDetailBody() {
     if (state.pending.length) $body.append(buildReviewSection(state.pending));
 
     const showLock = settings.showLockIcons !== false;
+    const sec = settings.sections || {};
     const onEdit = (path, val) => handlers.onEdit?.(path, val);
     const onToggleLock = (path, locked) => handlers.onToggleLock?.(path, locked);
 
-    // World section
+    // World section (clock always; world fields gated by the section toggle)
     const $world = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-earth-americas"></i> World</div>');
     $world.append(fieldRow('clock', state.clock, state, { showLock, label: 'Time', onEdit, onToggleLock }));
-    for (const [key, f] of Object.entries(state.world)) {
-        $world.append(fieldRow(`world.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
+    if (sec.world !== false) {
+        for (const [key, f] of Object.entries(state.world)) {
+            $world.append(fieldRow(`world.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
+        }
     }
     $body.append($world);
 
     // User stats
-    if (Object.keys(state.userStats).length) {
+    if (sec.userStats && Object.keys(state.userStats).length) {
         const $us = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-user"></i> You</div>');
         for (const [key, f] of Object.entries(state.userStats)) {
             $us.append(fieldRow(`userStats.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
@@ -259,7 +262,7 @@ function buildDetailBody() {
     }
 
     // Characters
-    const names = Object.keys(state.characters);
+    const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         const $cs = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
         for (const name of names) {
@@ -333,13 +336,18 @@ function renderBanner() {
     }
 
     // chip strip
+    const sec = settings.sections || {};
     const $strip = $('<div class="wt-strip"></div>');
     $strip.append(chip('clock', 'Time', displayValue('clock', state.clock, state), state.clock.locked));
-    for (const [key, f] of Object.entries(state.world)) {
-        $strip.append(chip(`world.${key}`, key, displayValue(`world.${key}`, f, state), f.locked));
+    if (sec.world !== false) {
+        for (const [key, f] of Object.entries(state.world)) {
+            $strip.append(chip(`world.${key}`, key, displayValue(`world.${key}`, f, state), f.locked));
+        }
     }
-    for (const [key, f] of Object.entries(state.userStats)) {
-        $strip.append(chip(`userStats.${key}`, key, displayValue(`userStats.${key}`, f, state), f.locked));
+    if (sec.userStats) {
+        for (const [key, f] of Object.entries(state.userStats)) {
+            $strip.append(chip(`userStats.${key}`, key, displayValue(`userStats.${key}`, f, state), f.locked));
+        }
     }
 
     const $right = $('<div class="wt-strip-right"></div>');

@@ -620,6 +620,66 @@ body:has(#wt-inline) #extensionTopBar {
     font-size: 0.85em;
 }
 
+/* ---------------- Settings modal (schema editor) ---------------- */
+
+.wt-cfg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    text-align: left;
+}
+
+.wt-cfg-sec {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+}
+
+.wt-cfg-sec-head {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    opacity: 0.8;
+    margin-bottom: 0.5rem;
+}
+
+.wt-cfg-sec label {
+    display: block;
+    margin: 0.25rem 0;
+}
+
+.wt-cfg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.wt-cfg-row {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.wt-cfg-row .wt-cfg-key {
+    flex: 1 1 8rem;
+}
+
+.wt-cfg-row .wt-cfg-type {
+    flex: 0 0 6rem;
+}
+
+.wt-cfg-row .wt-cfg-extra,
+.wt-cfg-row .wt-cfg-max {
+    flex: 1 1 6rem;
+}
+
+.wt-cfg-row .wt-cfg-del {
+    flex: 0 0 auto;
+    padding: 0.2rem 0.5rem;
+}
+
 /* Collapsed float: header only. */
 .wt-float.wt-collapsed {
     height: auto !important;

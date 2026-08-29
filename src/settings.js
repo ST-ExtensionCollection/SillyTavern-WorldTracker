@@ -35,6 +35,8 @@ function defaultSettings() {
         // --- ui ---
         uiMode: 'banner',           // 'banner' | 'float' | 'dock'
         bannerExpanded: false,
+        // Which state groups are shown / tracked. User stats off by default.
+        sections: { world: true, userStats: false, characters: true },
         floatPos: { x: 80, y: 80 },
         floatSize: { w: 340, h: 420 },
         dockSide: 'right',          // 'left' | 'right'
@@ -65,10 +67,19 @@ export function loadSettings(extension_settings) {
     for (const k of Object.keys(defaults)) {
         if (!(k in existing)) existing[k] = defaults[k];
     }
-    // No schema editor exists yet, so the schema is not user-owned — always
-    // refresh it from code so new fields / presets land. (When a schema editor
-    // ships, switch this to a deep merge that preserves user edits.)
-    existing.schema = defaultSchema();
+    // The schema is user-owned (settings modal). Keep their edits; only fill a
+    // missing schema or missing clock sub-keys from code.
+    const ds = defaultSchema();
+    if (!existing.schema || typeof existing.schema !== 'object') existing.schema = ds;
+    existing.schema.clock = { ...ds.clock, ...(existing.schema.clock || {}) };
+    if (!Array.isArray(existing.schema.world)) existing.schema.world = ds.world;
+    if (!Array.isArray(existing.schema.userStats)) existing.schema.userStats = ds.userStats;
+    if (!existing.schema.character || !Array.isArray(existing.schema.character.fields)) {
+        existing.schema.character = ds.character;
+    }
+    if (!existing.sections || typeof existing.sections !== 'object') existing.sections = { ...defaults.sections };
+    else for (const k of Object.keys(defaults.sections)) if (!(k in existing.sections)) existing.sections[k] = defaults.sections[k];
+    if (!existing.promptOverrides || typeof existing.promptOverrides !== 'object') existing.promptOverrides = {};
     existing.formatVersion = FORMAT_VERSION;
     return existing;
 }

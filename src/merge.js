@@ -51,7 +51,7 @@ function fieldProposal(path, label, field, incoming, sourceMessageId) {
  * @returns {Array} proposals
  */
 export function diffToProposals(st, data, opts = {}) {
-    const { sourceMessageId = null, authorName = null } = opts;
+    const { sourceMessageId = null, authorName = null, sections = {} } = opts;
     const out = [];
     if (!data || typeof data !== 'object') return out;
 
@@ -75,7 +75,7 @@ export function diffToProposals(st, data, opts = {}) {
     }
 
     // --- world ---
-    if (data.world && typeof data.world === 'object') {
+    if (sections.world !== false && data.world && typeof data.world === 'object') {
         for (const [k, v] of Object.entries(data.world)) {
             const f = st.world[k];
             if (!f || f.locked || v == null || sameValue(f, v)) continue;
@@ -84,7 +84,7 @@ export function diffToProposals(st, data, opts = {}) {
     }
 
     // --- user stats ---
-    if (data.userStats && typeof data.userStats === 'object') {
+    if (sections.userStats && data.userStats && typeof data.userStats === 'object') {
         for (const [k, v] of Object.entries(data.userStats)) {
             const f = st.userStats[k];
             if (!f || f.locked || v == null) continue;
@@ -95,7 +95,7 @@ export function diffToProposals(st, data, opts = {}) {
     }
 
     // --- characters ---
-    if (data.characters && typeof data.characters === 'object') {
+    if (sections.characters !== false && data.characters && typeof data.characters === 'object') {
         for (const [name, fields] of Object.entries(data.characters)) {
             const entry = st.characters[name];
             if (!entry) {

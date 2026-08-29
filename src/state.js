@@ -134,6 +134,35 @@ export function get(schema) {
     return m[META_KEY];
 }
 
+/**
+ * Re-shape the current chat's state to match an edited schema: add new fields,
+ * remove deleted ones, sync type/unit/options/max on the survivors (values are
+ * kept). Called after the settings modal saves.
+ */
+export function applySchema(st, schema) {
+    if (!st) return;
+    reconcile(st, schema); // adds any missing world/userStats + clock keys
+
+    const syncScalar = (target, defs, extra = () => {}) => {
+        const keys = new Set((defs || []).map((f) => f.key));
+        for (const k of Object.keys(target)) if (!keys.has(k)) delete target[k];
+        for (const f of defs || []) {
+            if (!target[f.key]) {
+                target[f.key] = { value: f.default ?? (f.type === 'number' ? 0 : ''), type: f.type ?? 'text', locked: !!f.lockedByDefault, lastChangedBy: null };
+            }
+            target[f.key].type = f.type ?? 'text';
+            extra(target[f.key], f);
+        }
+    };
+
+    syncScalar(st.world, schema.world, (t, f) => { t.unit = f.unit; });
+    syncScalar(st.userStats, schema.userStats, (t, f) => { t.max = f.max; });
+    for (const name of Object.keys(st.characters)) {
+        syncScalar(st.characters[name].fields, schema.character?.fields, (t, f) => { t.options = f.options; });
+    }
+    save();
+}
+
 /** Replace the whole state object (used by snapshot restore). */
 export function replace(newState) {
     const m = meta();

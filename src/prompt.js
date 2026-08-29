@@ -26,20 +26,20 @@ function cleanMessage(mes, cap) {
 }
 
 /** The object we want back, pre-filled with the current real values. */
-function currentAsJson(state) {
+function currentAsJson(state, sec = {}) {
     const o = {};
     if (state.clock && !state.clock.locked) {
         o.clock = { elapsed: { days: 0, hours: 0, minutes: 0, seconds: 0 } };
     }
-    if (Object.keys(state.world).length) {
+    if (sec.world !== false && Object.keys(state.world).length) {
         o.world = {};
         for (const [k, f] of Object.entries(state.world)) o.world[k] = f.value;
     }
-    if (Object.keys(state.userStats).length) {
+    if (sec.userStats && Object.keys(state.userStats).length) {
         o.userStats = {};
         for (const [k, f] of Object.entries(state.userStats)) o.userStats[k] = f.value;
     }
-    const names = Object.keys(state.characters);
+    const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         o.characters = {};
         for (const name of names) {
@@ -53,21 +53,22 @@ function currentAsJson(state) {
 }
 
 /** Human notes about constraints that don't fit in the JSON. */
-function constraintNotes(state) {
+function constraintNotes(state, sec = {}) {
     const notes = [];
     if (state.clock && !state.clock.locked) {
         notes.push(`- clock.elapsed = in-world time passed since ${JSON.stringify(format(state.clock.iso, state.clock.displayFormat))}. Dialogue back-and-forth is seconds. Never output an absolute date/time.`);
     } else if (state.clock?.locked) {
         notes.push('- clock: LOCKED. Omit the clock key entirely.');
     }
-    for (const [k, f] of Object.entries(state.world)) {
+    if (sec.world !== false) for (const [k, f] of Object.entries(state.world)) {
         if (f.locked) notes.push(`- world.${k}: LOCKED — must stay ${JSON.stringify(f.value)}.`);
         else if (f.type === 'number' && f.unit) notes.push(`- world.${k}: number in ${f.unit}.`);
     }
-    for (const [k, f] of Object.entries(state.userStats)) {
+    if (sec.userStats) for (const [k, f] of Object.entries(state.userStats)) {
         if (f.locked) notes.push(`- userStats.${k}: LOCKED — must stay ${f.value}.`);
         else if (f.max != null) notes.push(`- userStats.${k}: integer 0–${f.max}.`);
     }
+    if (sec.characters === false) return notes;
     for (const [name, c] of Object.entries(state.characters)) {
         for (const [fk, ff] of Object.entries(c.fields)) {
             if (ff.locked) notes.push(`- characters.${name}.${fk}: LOCKED — must stay ${JSON.stringify(ff.value)}.`);
@@ -78,7 +79,7 @@ function constraintNotes(state) {
 }
 
 /** JSON Schema describing the response shape (unlocked fields only). */
-export function buildResponseSchema(state) {
+export function buildResponseSchema(state, sec = {}) {
     const props = {};
     if (state.clock && !state.clock.locked) {
         props.clock = {
@@ -99,11 +100,11 @@ export function buildResponseSchema(state) {
         for (const [k, f] of entries) if (!f.locked) p[k] = propFn(f);
         return Object.keys(p).length ? { type: 'object', properties: p } : null;
     };
-    const worldP = objOf(Object.entries(state.world), (f) => (f.type === 'number' ? { type: 'number' } : { type: 'string' }));
+    const worldP = sec.world !== false ? objOf(Object.entries(state.world), (f) => (f.type === 'number' ? { type: 'number' } : { type: 'string' })) : null;
     if (worldP) props.world = worldP;
-    const usP = objOf(Object.entries(state.userStats), () => ({ type: 'number' }));
+    const usP = sec.userStats ? objOf(Object.entries(state.userStats), () => ({ type: 'number' })) : null;
     if (usP) props.userStats = usP;
-    const names = Object.keys(state.characters);
+    const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         const cp = {};
         for (const name of names) {
@@ -141,21 +142,22 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     const { settings = {}, playerName, authorName } = opts;
     const sys = settings.promptOverrides?.system || DEFAULT_SYSTEM;
     const cap = Number(settings.maxMessageChars) || 1500;
+    const sec = settings.sections || {};
     const L = [];
 
     L.push('CURRENT WORLD STATE — reply with this object, updated:');
     L.push('```json');
-    L.push(JSON.stringify(currentAsJson(state), null, 2));
+    L.push(JSON.stringify(currentAsJson(state, sec), null, 2));
     L.push('```');
 
-    const notes = constraintNotes(state);
+    const notes = constraintNotes(state, sec);
     if (notes.length) {
         L.push('');
         L.push('Constraints:');
         L.push(...notes);
     }
 
-    const names = Object.keys(state.characters);
+    const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         const writable = names.filter((n) => inScope(state.characters[n], n, authorName));
         const readonly = names.filter((n) => !writable.includes(n));

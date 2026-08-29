@@ -10,6 +10,7 @@ import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
 import { diffToProposals, applyProposal } from './src/merge.js';
 import { updateInjection } from './src/inject.js';
+import { openSettingsModal } from './src/ui/settings-modal.js';
 import { initPanel, renderPanel, replaceBanner, setBusy } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
@@ -151,7 +152,7 @@ async function onManualUpdate(opts = {}) {
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
 
     try {
-        const schema = settings.structuredOutput ? buildResponseSchema(st) : null;
+        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}) : null;
         const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
         if (job.superseded) { log('response ignored (superseded)'); return; }
         vlog('tracker response (first 500):', String(text || '').slice(0, 500));
@@ -162,7 +163,7 @@ async function onManualUpdate(opts = {}) {
             return;
         }
         log('parsed tracker data:', res.data);
-        ingestProposals(st, diffToProposals(st, res.data, { sourceMessageId: srcId, authorName }));
+        ingestProposals(st, diffToProposals(st, res.data, { sourceMessageId: srcId, authorName, sections: settings.sections || {} }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
         log('request error:', err);
@@ -269,14 +270,16 @@ function onDeclineAll() {
 }
 
 function onOpenSettings() {
-    // Full in-panel settings modal comes later. For now, open the Extensions
-    // tab and expand our drawer.
-    const $wand = $('#extensions-settings-button, #sys-settings-button').first();
-    const $drawerContent = $('#wt-settings-drawer .inline-drawer-content');
-    const $toggle = $('#wt-settings-drawer .inline-drawer-toggle');
-    if ($drawerContent.length && !$drawerContent.is(':visible')) $toggle.trigger('click');
-    if ($toggle.length) $toggle[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-    else toastr.info('WorldTracker settings live in the Extensions tab for now.');
+    openSettingsModal(ctx, settings, (newSchema, newSections) => {
+        settings.schema = newSchema;
+        settings.sections = newSections;
+        saveSettingsDebounced();
+        const st = getState();
+        if (st) state.applySchema(st, newSchema);
+        log('schema updated:', newSchema.world.length, 'world,', newSchema.userStats.length, 'stats,',
+            (newSchema.character?.fields || []).length, 'char fields; sections', JSON.stringify(newSections));
+        refresh();
+    }).catch((e) => { log('settings modal error', e); });
 }
 
 // ---------------------------------------------------------------------------

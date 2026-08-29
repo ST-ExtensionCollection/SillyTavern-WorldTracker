@@ -286,12 +286,11 @@ body:has(#wt-inline) #extensionTopBar {
     border-color: var(--wt-accent);
 }
 
-/* Editors: rely on ST's .text_pole / .menu_button for theming; we only size.
-   `order:1` + the row's flex-wrap forces the editor onto its own full line. */
+/* Plain editor (text / number / enum): stays inline on the field row —
+   [label] [input …] [ok] [cancel] [lock] — never wraps. */
 .wt-field-editor {
-    order: 1;
-    flex: 0 0 100%;
-    width: 100%;
+    flex: 1 1 8rem;
+    min-width: 0;
     display: flex;
     flex-wrap: nowrap;
     gap: 0.3rem;
@@ -309,8 +308,8 @@ body:has(#wt-inline) #extensionTopBar {
     flex: 0 0 auto;
 }
 
-/* Clock editor: fixed label column + fields column. */
-.wt-clock-editor {
+/* Clock editor is multi-row — give it its own full line. */
+.wt-field-editor.wt-clock-editor {
     order: 1;
     flex: 0 0 100%;
     width: 100%;

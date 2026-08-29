@@ -75,6 +75,16 @@ export function makeDraggable(element, handle, ns, onEnd, excludeSelector) {
  *
  * Returns a cleanup function.
  */
+function scrollParent(node) {
+    let el = node && node.parentElement;
+    while (el) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+        el = el.parentElement;
+    }
+    return null;
+}
+
 export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = {}) {
     const list = listEl && listEl.nodeType ? listEl : (listEl && listEl[0]);
     if (!list || !itemSelector || !handleSelector) return () => {};
@@ -116,9 +126,19 @@ export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = 
     const finish = () => {
         clearArmed();
         if (!dragEl) return;
+        // Ending a native drag inside a scroll container (the settings popup)
+        // makes the browser yank the scroll position back to the source — grab
+        // the current offset and pin it back after the drop settles.
+        const sc = scrollParent(list);
+        const scTop = sc ? sc.scrollTop : 0;
         dragEl.classList.remove('wt-dragging');
         dragEl = null;
         if (onDrop) onDrop();
+        if (sc) {
+            const pin = () => { if (sc.scrollTop !== scTop) sc.scrollTop = scTop; };
+            requestAnimationFrame(pin);
+            setTimeout(pin, 0);
+        }
     };
 
     list.addEventListener('mousedown', onMouseDown);

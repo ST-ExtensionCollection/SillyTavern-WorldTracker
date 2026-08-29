@@ -122,6 +122,9 @@ function reconcile(state, schema) {
     if (!Array.isArray(state.pending)) state.pending = [];
     if (!state.snapshots || typeof state.snapshots !== 'object') state.snapshots = {};
     if (!Array.isArray(state.history)) state.history = [];
+    for (const c of Object.values(state.characters)) {
+        if (!c.rels || typeof c.rels !== 'object') c.rels = {};
+    }
     for (const f of s.world ?? []) {
         if (!state.world[f.key]) {
             state.world[f.key] = { value: f.default ?? '', type: f.type ?? 'text', unit: f.unit, group: normGroup(f.group), locked: !!f.lockedByDefault, lastChangedBy: null };
@@ -437,7 +440,7 @@ export function ensureCharacter(state, name, schema) {
     const s = schema ?? defaultSchema();
     if (!state.characters[name]) {
         const template = isPlayerName(name) ? (s.player?.fields ?? []) : (s.character?.fields ?? []);
-        const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, order: Object.keys(state.characters).length, fields: {} };
+        const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, order: Object.keys(state.characters).length, fields: {}, rels: {} };
         for (const f of template) {
             entry.fields[f.key] = {
                 value: f.default ?? '',
@@ -457,8 +460,29 @@ export function ensureCharacter(state, name, schema) {
 export function removeCharacter(state, name) {
     if (state.characters[name]) {
         delete state.characters[name];
+        // drop dangling relationships pointing at the removed character
+        for (const other of Object.values(state.characters)) {
+            if (other.rels && name in other.rels) delete other.rels[name];
+        }
         save();
     }
+}
+
+/**
+ * Set how `subject` regards `object` (a value from RELATIONSHIP_OPTIONS, or a
+ * falsy value to clear it). `mirror` also writes the reverse direction.
+ */
+export function setRel(state, subject, object, value, { mirror = false } = {}) {
+    const put = (a, b) => {
+        const e = state.characters[a];
+        if (!e) return;
+        if (!e.rels) e.rels = {};
+        if (!value) delete e.rels[b];
+        else e.rels[b] = value;
+    };
+    put(subject, object);
+    if (mirror) put(object, subject);
+    save();
 }
 
 /**

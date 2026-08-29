@@ -31,6 +31,11 @@ export function buildSummary(st, sec = {}) {
             const bits = Object.entries(c.fields)
                 .filter(([, f]) => f.value !== '' && f.value != null)
                 .map(([fk, f]) => `${fk}: ${f.value}`);
+            if (c.rels && Object.keys(c.rels).length) {
+                const groups = {};
+                for (const [obj, rel] of Object.entries(c.rels)) (groups[rel] ||= []).push(obj);
+                bits.push('rels: ' + Object.entries(groups).map(([r, ns]) => `${r}→${ns.join(',')}`).join('; '));
+            }
             const tag = c.present === false ? ' (not present)' : '';
             if (bits.length) lines.push(`${name}${tag} — ${bits.join('; ')}`);
         }

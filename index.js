@@ -240,6 +240,33 @@ function onSetPresent(name, present) {
     refresh();
 }
 
+/** Set/clear how `subject` regards `object`; optionally mirror the reverse. */
+function onSetRel(subject, object, value, mirror) {
+    const st = getState();
+    if (!st || !st.characters[subject]) return;
+    const rec = (a, b) => {
+        const before = st.characters[a]?.rels?.[b];
+        if (String(before ?? '') === String(value ?? '')) return null;
+        return {
+            path: `characters.${a}.rels.${b}`, label: `${a} → ${b}`, kind: 'rel',
+            before: before || '—', after: value || '—', rawBefore: before ?? '', rawAfter: value ?? '',
+        };
+    };
+    const changes = [rec(subject, object)];
+    if (mirror && st.characters[object]) changes.push(rec(object, subject));
+    state.setRel(st, subject, object, value, { mirror: !!mirror });
+    const real = changes.filter(Boolean);
+    if (real.length) state.pushHistory(st, { mesId: null, trigger: 'edit', changes: real });
+    vlog(`rel ${subject} -> ${object} = ${value || '(cleared)'}${mirror ? ' (mirrored)' : ''}`);
+    refresh();
+}
+
+function onToggleRels(collapsed) {
+    settings.relsCollapsed = !!collapsed;
+    saveSettingsDebounced();
+    refresh();
+}
+
 let lastCharOrderSig = '';
 function onReorderCharacters(names) {
     const st = getState();
@@ -684,7 +711,8 @@ jQuery(async () => {
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
         onToggleFieldGroup, onSetPresent, onAddParticipants, onReorderCharacters,
-        onRevertTurn, getStateAsOf, fieldHistory: (path) => { const s = getState(); return s ? state.fieldHistory(s, path) : []; },
+        onRevertTurn, getStateAsOf, onSetRel, onToggleRels,
+        fieldHistory: (path) => { const s = getState(); return s ? state.fieldHistory(s, path) : []; },
     } });
 
     buildSettingsDrawer();

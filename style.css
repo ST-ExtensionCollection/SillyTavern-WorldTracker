@@ -621,6 +621,81 @@ body:has(#wt-inline) #extensionTopBar {
     display: none;
 }
 
+/* ---------------- Character relationships ---------------- */
+
+.wt-char-rels {
+    margin-top: 0.3rem;
+}
+
+.wt-rel-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0;
+    line-height: 1.6;
+}
+
+.wt-rel-label {
+    font-weight: 700;
+    opacity: 0.8;
+    text-transform: capitalize;
+}
+
+.wt-rel-chip {
+    background: color-mix(in srgb, var(--wt-accent) 14%, transparent);
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.wt-rel-chip:hover {
+    border-color: var(--wt-accent);
+}
+
+.wt-rel-chip-ed,
+.wt-rel-add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.3rem;
+}
+
+.wt-rel-chip-ed {
+    margin: 0.2rem 0 0.2rem 0.4rem;
+}
+
+.wt-rel-add select,
+.wt-rel-chip-ed select {
+    background: transparent;
+    color: var(--wt-fg);
+    border: 1px solid var(--wt-border);
+    border-radius: 4px;
+    padding: 0.1rem;
+    font-size: 0.8rem;
+    max-width: 9rem;
+}
+
+.wt-rel-mirror,
+.wt-rel-chip-ed label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    opacity: 0.8;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.wt-rel-empty {
+    opacity: 0.5;
+    font-size: 0.85em;
+    padding: 0.15rem 0;
+}
+
 /* ---------------- Review queue + inline card ---------------- */
 
 .wt-review {

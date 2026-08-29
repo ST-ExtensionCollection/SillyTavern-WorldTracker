@@ -7,6 +7,7 @@
 import { addElapsed, format, deltaToSeconds, toIso as isoOf, humanDelta } from './clock.js';
 import { fmtNum } from './ui/format.js';
 import { inScope } from './prompt.js';
+import { RELATIONSHIP_OPTIONS } from './schema.js';
 import * as state from './state.js';
 
 /** Loose equality for field values (trim strings, compare numbers numerically). */
@@ -157,6 +158,21 @@ export function diffToProposals(st, data, opts = {}) {
                         from: cur ? 'present' : 'away', to: nv ? 'present' : 'away', rawTo: nv,
                         sourceMessageId,
                     });
+                    continue;
+                }
+                if (fk === 'relationships') {
+                    if (!v || typeof v !== 'object') continue;
+                    if (!entry.rels) entry.rels = {};
+                    for (const [obj, rel] of Object.entries(v)) {
+                        if (!RELATIONSHIP_OPTIONS.includes(rel)) continue;
+                        if (!st.characters[obj] || obj === name) continue;
+                        if (entry.rels[obj] === rel) continue;
+                        out.push({
+                            path: `characters.${name}.rels.${obj}`, kind: 'rel', label: `${name} → ${obj}`,
+                            from: entry.rels[obj] || '—', to: rel, rawTo: rel,
+                            sourceMessageId,
+                        });
+                    }
                     continue;
                 }
                 const f = entry.fields[fk];

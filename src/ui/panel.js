@@ -7,6 +7,7 @@
 import { fieldRow } from './fields.js';
 import { displayValue, esc, iconFor } from './format.js';
 import { makeDraggable, makeResizable, makeSortable } from './drag.js';
+import { RELATIONSHIP_OPTIONS } from '../schema.js';
 import { vlog } from '../log.js';
 
 const ROOT_ID = 'wt-root';
@@ -453,7 +454,68 @@ function buildDetailBody() {
             appendFieldRows($fields, Object.entries(entry.fields), 'char',
                 (key, f) => fieldRow(`characters.${name}.fields.${key}`, f, state, rowOpts(`characters.${name}.fields.${key}`, key)));
             $c.append($fields);
+            $c.append(buildRelsBlock(name, entry));
             return $c;
+        };
+
+        /** The per-character collapsible Relationships block (grouped by value). */
+        const buildRelsBlock = (name, entry) => {
+            const rels = entry.rels || {};
+            const relNames = Object.keys(rels);
+            const collapsed = settings.relsCollapsed !== false;
+            const $rg = $(`<div class="wt-char-rels wt-fieldgroup${collapsed ? ' wt-collapsed' : ''}"></div>`);
+            const $rh = $(`<button class="wt-fieldgroup-head" type="button"><i class="fa-solid ${collapsed ? 'fa-chevron-right' : 'fa-chevron-down'}"></i> <span class="wt-fieldgroup-title">Relationships (${relNames.length})</span></button>`);
+            $rh.on('click', () => handlers.onToggleRels?.(!$rg.hasClass('wt-collapsed')));
+            const $rl = $('<div class="wt-fieldgroup-list wt-rels-list"></div>');
+
+            const openChipEditor = ($chip, obj, curVal) => {
+                $('.wt-rel-chip-ed').remove();
+                const $ed = $(`<span class="wt-rel-chip-ed">
+                    <select class="wt-rel-ed-value">
+                        <option value="">— remove —</option>
+                        ${RELATIONSHIP_OPTIONS.map((o) => `<option${o === curVal ? ' selected' : ''}>${esc(o)}</option>`).join('')}
+                    </select>
+                    <label title="Also set the reverse direction"><input type="checkbox" class="wt-rel-ed-mirror"> ↔</label>
+                    <button class="wt-rel-ed-ok menu_button wt-btn-sm" type="button"><i class="fa-solid fa-check"></i></button>
+                    <button class="wt-rel-ed-cancel menu_button wt-btn-sm" type="button"><i class="fa-solid fa-xmark"></i></button>
+                </span>`);
+                $ed.find('.wt-rel-ed-ok').on('click', () => handlers.onSetRel?.(name, obj, $ed.find('.wt-rel-ed-value').val(), $ed.find('.wt-rel-ed-mirror').is(':checked')));
+                $ed.find('.wt-rel-ed-cancel').on('click', () => $ed.remove());
+                $chip.after($ed);
+            };
+
+            const groups = {};
+            for (const [obj, val] of Object.entries(rels)) (groups[val] = groups[val] || []).push(obj);
+            for (const [val, objs] of Object.entries(groups)) {
+                const $line = $(`<div class="wt-rel-line"><span class="wt-rel-label">${esc(val)}:</span></div>`);
+                for (const obj of objs) {
+                    const $chip = $(`<button class="wt-rel-chip" type="button" title="Edit / remove">${esc(obj)}</button>`);
+                    $chip.on('click', () => openChipEditor($chip, obj, val));
+                    $line.append(' ', $chip);
+                }
+                $rl.append($line);
+            }
+
+            const targets = names.filter((n) => n !== name && !(n in rels));
+            if (targets.length) {
+                const $add = $(`<div class="wt-rel-add">
+                    <select class="wt-rel-target">${targets.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select>
+                    <select class="wt-rel-value">${RELATIONSHIP_OPTIONS.map((o) => `<option>${esc(o)}</option>`).join('')}</select>
+                    <label class="wt-rel-mirror" title="Also set the reverse direction"><input type="checkbox"> ↔</label>
+                    <button class="wt-rel-add-btn menu_button wt-btn-sm" type="button"><i class="fa-solid fa-plus"></i></button>
+                </div>`);
+                $add.find('.wt-rel-add-btn').on('click', () => {
+                    const t = $add.find('.wt-rel-target').val();
+                    const v = $add.find('.wt-rel-value').val();
+                    if (t && v) handlers.onSetRel?.(name, t, v, $add.find('.wt-rel-mirror input').is(':checked'));
+                });
+                $rl.append($add);
+            } else if (!relNames.length) {
+                $rl.append('<div class="wt-rel-empty">No other tracked characters.</div>');
+            }
+
+            $rg.append($rh, $rl);
+            return $rg;
         };
 
         const isMain = (n) => n === pName || state.characters[n].updater !== 'narrator';

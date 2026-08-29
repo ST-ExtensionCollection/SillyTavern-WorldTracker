@@ -164,6 +164,16 @@ absent characters still sink to the bottom. Order is **per chat** (stored in
 that chat's metadata) and reverts with a swipe/regenerate like any other tracked
 value.
 
+### Character relationships
+
+Each card has a collapsible **Relationships** block: pick another tracked
+character and how this one regards them (Lover / Friend / Rival / …). Entries
+are shown grouped by value — `Friend: Alice, Bob`. Relationships are
+**directional** (A→B is separate from B→A); tick **↔** in the add row to also
+write the reverse. The tracker proposes changes when a scene clearly shifts a
+bond, and relationships appear in the `[World State]` injection as
+`rels: Friend→Alice,Bob; Rival→Carol`.
+
 ### Injecting state into the chat
 
 *Feed tracked state to the roleplay model* (on by default) inserts a compact

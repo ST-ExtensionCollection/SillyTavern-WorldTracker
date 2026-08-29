@@ -12,29 +12,135 @@ const DEFAULT_SECTIONS = { world: true, userStats: false, characters: true };
 
 function esc(v) { return $('<i>').text(v == null ? '' : String(v)).html(); }
 
+let ctxRef = null; // SillyTavern context, set by openSettingsModal (needed for the nested enum popup)
+
+function enumSummary(options, def) {
+    if (!options.length) return '(no options)';
+    const s = options.map((o) => (o === def ? `${o} ★` : o)).join(', ');
+    return s.length > 44 ? `${s.slice(0, 42)}…` : s;
+}
+
+/** Reflect a row's enum state (stored via jQuery .data) onto its button label. */
+function refreshEnumBtn($r) {
+    $r.find('.wt-enum-summary').text(enumSummary($r.data('enumOptions') || [], $r.data('enumDefault') || ''));
+}
+
 function fieldRow(kind, f = {}) {
     const isStat = kind === 'stat';
     const type = f.type || (isStat ? 'number' : 'text');
     const $r = $(`
-        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(f.default ?? '')}">
+        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(type === 'text' ? (f.default ?? '') : '')}">
             <input type="text" class="text_pole wt-cfg-key" placeholder="name" value="${esc(f.key)}">
             ${isStat ? '' : `<select class="text_pole wt-cfg-type">${TYPES.map((t) => `<option value="${t}"${t === type ? ' selected' : ''}>${t}</option>`).join('')}</select>`}
             ${isStat
         ? `<input type="number" class="text_pole wt-cfg-max" placeholder="max" value="${f.max ?? ''}" title="max value (blank = unbounded)">`
-        : `<input type="text" class="text_pole wt-cfg-extra" placeholder="${type === 'number' ? 'unit' : type === 'enum' ? 'a, b, c' : ''}" value="${esc(type === 'enum' ? (f.options || []).join(', ') : (f.unit || ''))}">`}
+        : `<input type="text" class="text_pole wt-cfg-extra" placeholder="${type === 'number' ? 'unit' : ''}"${type === 'enum' ? ' style="display:none"' : ''} value="${esc(type === 'number' ? (f.unit || '') : '')}">
+           <button class="menu_button wt-enum-edit"${type === 'enum' ? '' : ' style="display:none"'} title="Edit options"><i class="fa-solid fa-pen-to-square"></i> <span class="wt-enum-summary"></span></button>`}
             <button class="menu_button wt-cfg-del" title="Remove"><i class="fa-solid fa-xmark"></i></button>
         </div>
     `);
     if (!isStat) {
+        $r.data('enumOptions', Array.isArray(f.options) ? [...f.options] : []);
+        $r.data('enumDefault', type === 'enum' ? (f.default || (f.options || [])[0] || '') : '');
+        refreshEnumBtn($r);
+
         const $type = $r.find('.wt-cfg-type');
         const $extra = $r.find('.wt-cfg-extra');
+        const $enumBtn = $r.find('.wt-enum-edit');
         $type.on('change', () => {
             const t = $type.val();
-            $extra.attr('placeholder', t === 'number' ? 'unit' : t === 'enum' ? 'a, b, c' : '').val('');
+            $extra.toggle(t !== 'enum').attr('placeholder', t === 'number' ? 'unit' : '');
+            $enumBtn.toggle(t === 'enum');
+        });
+        $enumBtn.on('click', async () => {
+            const res = await openEnumEditor($r.data('enumOptions') || [], $r.data('enumDefault') || '');
+            if (!res) return;
+            $r.data('enumOptions', res.options);
+            $r.data('enumDefault', res.default);
+            refreshEnumBtn($r);
         });
     }
     $r.find('.wt-cfg-del').on('click', () => $r.remove());
     return $r;
+}
+
+/** Nested popup: reorder / rename / delete enum options, star one as default. */
+async function openEnumEditor(options, defaultVal) {
+    const $c = $('<div class="wt-enum-ed"></div>');
+    const $list = $('<div class="wt-enum-list"></div>');
+    let curDefault = defaultVal;
+
+    const optRow = (text) => {
+        const $o = $(`
+            <div class="wt-enum-opt" draggable="true">
+                <span class="wt-enum-grip" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></span>
+                <input type="text" class="text_pole wt-enum-text" value="${esc(text)}">
+                <button class="menu_button wt-enum-star" title="Set as default"><i class="fa-solid fa-star"></i></button>
+                <button class="menu_button wt-enum-del" title="Delete"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        `);
+        $o.find('.wt-enum-star').on('click', () => {
+            curDefault = String($o.find('.wt-enum-text').val() || '');
+            markDefault();
+        });
+        $o.find('.wt-enum-del').on('click', () => { $o.remove(); markDefault(); });
+        $o.on('dragstart', (e) => {
+            if (!$(e.target).closest('.wt-enum-grip').length) { e.preventDefault(); return; }
+            $o.addClass('wt-dragging');
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+        });
+        $o.on('dragend', () => $o.removeClass('wt-dragging'));
+        $o.on('dragover', (e) => {
+            e.preventDefault();
+            const $drag = $list.find('.wt-dragging');
+            if (!$drag.length || $drag[0] === $o[0]) return;
+            const r = $o[0].getBoundingClientRect();
+            const after = (e.originalEvent.clientY - r.top) > r.height / 2;
+            $o[after ? 'after' : 'before']($drag);
+        });
+        return $o;
+    };
+    const markDefault = () => {
+        $list.find('.wt-enum-opt').each(function () {
+            const isDef = String($(this).find('.wt-enum-text').val() || '') === curDefault && curDefault !== '';
+            $(this).toggleClass('wt-is-default', isDef);
+            $(this).find('.wt-enum-star i').attr('class', isDef ? 'fa-solid fa-star' : 'fa-regular fa-star');
+        });
+    };
+    for (const o of options) $list.append(optRow(o));
+    markDefault();
+
+    const $add = $('<button class="menu_button"><i class="fa-solid fa-plus"></i> Add option</button>');
+    $add.on('click', () => { $list.append(optRow('')); });
+
+    const $import = $(`
+        <div class="wt-enum-import">
+            <input type="text" class="text_pole wt-enum-csv" placeholder="paste a comma list, then Import">
+            <button class="menu_button wt-enum-csv-go">Import</button>
+        </div>
+    `);
+    $import.find('.wt-enum-csv-go').on('click', () => {
+        const parts = String($import.find('.wt-enum-csv').val() || '').split(',').map((s) => s.trim()).filter(Boolean);
+        if (!parts.length) return;
+        $list.empty();
+        for (const p of parts) $list.append(optRow(p));
+        if (!parts.includes(curDefault)) curDefault = '';
+        markDefault();
+        $import.find('.wt-enum-csv').val('');
+    });
+
+    $c.append($list, $add, $import);
+
+    const r = await ctxRef.callGenericPopup($c[0], ctxRef.POPUP_TYPE.CONFIRM, '', { okButton: 'Done', cancelButton: 'Cancel' });
+    if (r !== ctxRef.POPUP_RESULT.AFFIRMATIVE) return null;
+
+    const outOpts = [];
+    $list.find('.wt-enum-opt .wt-enum-text').each(function () {
+        const v = String($(this).val() || '').trim();
+        if (v && !outOpts.includes(v)) outOpts.push(v);
+    });
+    const def = outOpts.includes(curDefault) ? curDefault : (outOpts[0] || '');
+    return { options: outOpts, default: def };
 }
 
 function listSection(title, kind, list) {
@@ -73,15 +179,15 @@ function readRows($list, kind) {
         }
         const type = $r.find('.wt-cfg-type').val() || 'text';
         const extra = String($r.find('.wt-cfg-extra').val() || '').trim();
-        const prevDefault = $r.attr('data-default') || '';
         const f = { key, label: key, type, lockedByDefault: false, default: type === 'number' ? 0 : '' };
         if (type === 'number' && extra) f.unit = extra;
         if (type === 'enum') {
-            f.options = extra.split(',').map((s) => s.trim()).filter(Boolean);
-            // Keep the previous default if it's still a valid option.
-            f.default = f.options.includes(prevDefault) ? prevDefault : (f.options[0] ?? '');
-        } else if (type === 'text' && prevDefault) {
-            f.default = prevDefault;
+            f.options = ($r.data('enumOptions') || []).slice();
+            const d = $r.data('enumDefault') || '';
+            f.default = f.options.includes(d) ? d : (f.options[0] ?? '');
+        } else if (type === 'text') {
+            const prevDefault = $r.attr('data-default') || '';
+            if (prevDefault) f.default = prevDefault;
         }
         out.push(f);
     });
@@ -100,6 +206,7 @@ const SECTION_PILLS = [
  * @param {(schema, sections, extras)=>void} onSave  extras = { narratorName }
  */
 export async function openSettingsModal(ctx, settings, onSave) {
+    ctxRef = ctx;
     const s = settings.schema;
     const sec0 = { ...DEFAULT_SECTIONS, ...(settings.sections || {}) };
 

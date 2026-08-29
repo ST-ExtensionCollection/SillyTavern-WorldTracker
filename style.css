@@ -757,6 +757,81 @@ body:has(#wt-inline) #extensionTopBar {
     padding: 0.2rem 0.5rem;
 }
 
+.wt-cfg-row .wt-enum-edit {
+    flex: 1 1 6rem;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding: 0.2rem 0.5rem;
+}
+
+/* ---- enum option editor (nested popup) ---- */
+
+.wt-enum-ed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: left;
+    min-width: min(28rem, 80vw);
+}
+
+.wt-enum-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.wt-enum-opt {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid var(--wt-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--wt-bg) 96%, black);
+}
+
+.wt-enum-opt.wt-dragging {
+    opacity: 0.5;
+}
+
+.wt-enum-opt.wt-is-default {
+    border-color: var(--wt-accent);
+}
+
+.wt-enum-grip {
+    cursor: grab;
+    opacity: 0.6;
+    padding: 0 0.2rem;
+}
+
+.wt-enum-opt .wt-enum-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.wt-enum-opt .wt-enum-star,
+.wt-enum-opt .wt-enum-del {
+    flex: 0 0 auto;
+    padding: 0.2rem 0.5rem;
+}
+
+.wt-enum-opt.wt-is-default .wt-enum-star {
+    color: var(--wt-accent);
+    border-color: var(--wt-accent);
+}
+
+.wt-enum-import {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.wt-enum-import .wt-enum-csv {
+    flex: 1;
+}
+
 /* Collapsed float: header only. */
 .wt-float.wt-collapsed {
     height: auto !important;

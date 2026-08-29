@@ -53,7 +53,6 @@ function defaultSettings() {
         fieldGroupCollapsed: {},
         showLockIcons: true,
         showMessageCards: true,     // inline per-message "what changed this turn" card
-        messageCardsCollapsed: false, // start those cards' delta list collapsed
         relsCollapsed: true,        // collapse the per-character Relationships block
 
         // --- history ---

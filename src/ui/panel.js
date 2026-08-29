@@ -294,16 +294,19 @@ function renderMessageCards() {
         const $card = $('<div class="wt-card"></div>');
 
         if (group.pending.length) {
-            $card.append(`<div class="wt-card-head"><i class="fa-solid fa-compass"></i> WorldTracker — ${group.pending.length} proposed change${group.pending.length > 1 ? 's' : ''}</div>`);
+            const $ph = $(`<div class="wt-card-head">
+                <span><i class="fa-solid fa-compass"></i> WorldTracker — ${group.pending.length} proposed change${group.pending.length > 1 ? 's' : ''}</span>
+                <span class="wt-review-actions"><button class="wt-approve-all">Approve all</button><button class="wt-decline-all">Decline all</button></span>
+            </div>`);
+            $ph.find('.wt-approve-all').on('click', () => handlers.onApproveAll?.());
+            $ph.find('.wt-decline-all').on('click', () => handlers.onDeclineAll?.());
+            $card.append($ph);
             for (const p of group.pending) $card.append(buildPendingItem(p));
-            const $pf = $(`<div class="wt-card-foot"><button class="wt-approve-all">Approve all</button><button class="wt-decline-all">Decline all</button></div>`);
-            $pf.find('.wt-approve-all').on('click', () => handlers.onApproveAll?.());
-            $pf.find('.wt-decline-all').on('click', () => handlers.onDeclineAll?.());
-            $card.append($pf);
         }
 
         if (appliedChanges.length) {
-            const collapsed = !!settings.messageCardsCollapsed;
+            // Applied changes start folded — they're just a record, not an action.
+            const collapsed = true;
             const $applied = $(`<div class="wt-card-applied${collapsed ? ' wt-collapsed' : ''}"></div>`);
             const $head = $(`<button class="wt-card-applied-head" type="button"><i class="fa-solid ${collapsed ? 'fa-chevron-right' : 'fa-chevron-down'}"></i> ${appliedChanges.length} change${appliedChanges.length > 1 ? 's' : ''} this turn</button>`);
             const $list = $('<div class="wt-card-applied-list"></div>');

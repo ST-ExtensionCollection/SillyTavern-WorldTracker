@@ -723,6 +723,12 @@ body:has(#wt-inline) #extensionTopBar {
     margin-bottom: 0.3rem;
 }
 
+.wt-card-head > span:first-child {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
 .wt-card-foot {
     display: flex;
     gap: 0.4rem;
@@ -772,10 +778,7 @@ body:has(#wt-inline) #extensionTopBar {
 
 .wt-card-applied.wt-collapsed .wt-card-applied-list { display: none; }
 
-.wt-history-item .wt-review-diff { grid-column: 1 / -1; }
-
 .wt-state-dump {
-    grid-column: 1 / -1;
     margin: 0.35rem 0 0;
     padding: 0.4rem 0.5rem;
     border: 1px solid var(--wt-border);
@@ -819,11 +822,11 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-review-item {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "label btns" "diff btns" "reason btns";
-    gap: 0.1rem 0.5rem;
-    padding: 0.35rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.55rem;
+    padding: 0.28rem 0;
     border-top: 1px dashed var(--wt-border);
 }
 
@@ -832,7 +835,7 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-review-label {
-    grid-area: label;
+    flex: 0 0 auto;
     font-weight: 700;
     text-transform: capitalize;
 }
@@ -850,10 +853,12 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-review-diff {
-    grid-area: diff;
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.35rem;
     font-size: 0.8rem;
 }
 
@@ -868,17 +873,18 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-review-reason {
-    grid-area: reason;
+    flex: 1 1 100%;
     font-size: 0.74rem;
     opacity: 0.7;
 }
 
 .wt-review-btns {
-    grid-area: btns;
+    flex: 0 0 auto;
+    margin-left: auto;
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    justify-content: center;
+    flex-direction: row;
+    gap: 0.25rem;
+    align-self: center;
 }
 
 .wt-review-btns button {
@@ -887,7 +893,8 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-fg);
     border-radius: 4px;
     cursor: pointer;
-    padding: 0.2rem 0.4rem;
+    padding: 0.1rem 0.4rem;
+    line-height: 1;
 }
 
 .wt-review-btns .wt-approve:hover {

@@ -229,9 +229,10 @@ extension picks binding → default → whatever's active.
 Every applied change (tracker‑approved or hand‑edited) is appended to a per‑chat
 **history log** (last 120 records). From it:
 
-- Each tracked message shows an inline **"changes this turn"** card — a
-  read‑only `old → new` list for the message's *active swipe*, plus **Revert
-  turn** (undo everything that turn did) and **State as of here** (the
+- Each tracked message shows an inline **"changes this turn"** card. Still
+  pending proposals sit at the top with per‑row ✓/✗ and an Approve/Decline‑all
+  in the header; once applied they fold into a collapsed `N changes this turn`
+  strip (click to expand) with **Revert turn** and **State as of here** (the
   `[World State]` block reconstructed for that point).
 - Every field row with a past value gets a **⟲** button — a dropdown of prior
   values (with the message # and how long ago) to restore in one click. Handy

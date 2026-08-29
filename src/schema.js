@@ -64,6 +64,13 @@ export function defaultSchema() {
                 { key: 'status', label: 'Status', type: 'text', lockedByDefault: false, default: '' },
                 { key: 'location', label: 'Location', type: 'text', lockedByDefault: false, default: '' },
                 { key: 'relationship', label: 'Relationship', type: 'enum', options: RELATIONSHIP_OPTIONS, lockedByDefault: false, default: 'Neutral' },
+                // Wardrobe/appearance — models routinely forget outfits between
+                // replies, so track them explicitly. Cribbed from WTracker's
+                // hair/makeup/outfit/stateOfDress/posture character block.
+                { key: 'outfit', label: 'Outfit', type: 'text', lockedByDefault: false, default: '' },
+                { key: 'stateOfDress', label: 'State of dress', type: 'text', lockedByDefault: false, default: '' },
+                { key: 'appearance', label: 'Appearance', type: 'text', lockedByDefault: false, default: '' },
+                { key: 'pose', label: 'Pose', type: 'text', lockedByDefault: false, default: '' },
             ],
         },
     };

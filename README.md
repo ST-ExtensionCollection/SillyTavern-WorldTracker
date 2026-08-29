@@ -114,6 +114,12 @@ If your group is voiced by a single narrator card, leave characters on
 **Narrator** and set the *Narrator character* — per‑cast‑member ownership isn't
 possible because every message is authored by the one narrator.
 
+New characters are only picked up from the model's output on the **narrator's**
+turns (any turn if no narrator is set) — the narrator is who introduces them.
+
+In the detail sheet, main cast (Self / By) show at the top; narrator‑run
+characters are grouped under a collapsible **NPCs (N)**.
+
 Out‑of‑scope characters are told *"do not report this turn"* and any proposals
 for them are dropped.
 

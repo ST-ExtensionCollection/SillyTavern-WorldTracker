@@ -364,7 +364,7 @@ function buildDetailBody() {
             const absent = !isPlayer && entry.present === false;
             const byNames = [...new Set([...members, ...names])].filter((n) => n !== name);
             if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) byNames.push(entry.updater);
-            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}${isPlayer ? ' wt-char-player' : ''}" data-name="${esc(name)}"${isPlayer ? '' : ' draggable="true"'}><div class="wt-char-head">
+            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}${isPlayer ? ' wt-char-player' : ''}" data-name="${esc(name)}"><div class="wt-char-head">
                 ${isPlayer ? '' : '<span class="wt-char-grip" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></span>'}
                 ${isPlayer ? '' : `<button class="wt-char-present" title="${absent ? 'Away — click to mark present' : 'Present — click to mark away'}"><i class="fa-solid ${absent ? 'fa-eye-slash' : 'fa-eye'}"></i></button>`}
                 <span class="wt-char-name">${esc(name)}${isPlayer ? ' <span class="wt-char-you">you</span>' : ''}</span>

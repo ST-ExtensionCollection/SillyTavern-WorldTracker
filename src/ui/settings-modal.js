@@ -39,7 +39,7 @@ function fieldRow(kind, f = {}) {
     const isStat = kind === 'stat';
     const type = f.type || (isStat ? 'number' : 'text');
     const $r = $(`
-        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(type === 'text' ? (f.default ?? '') : '')}" draggable="true">
+        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(type === 'text' ? (f.default ?? '') : '')}">
             <span class="wt-cfg-grip" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></span>
             <input type="text" class="text_pole wt-cfg-key" placeholder="name" value="${esc(f.key)}">
             ${isStat ? '' : `<select class="text_pole wt-cfg-type">${TYPES.map((t) => `<option value="${t}"${t === type ? ' selected' : ''}>${t}</option>`).join('')}</select>`}
@@ -84,7 +84,7 @@ async function openEnumEditor(options, defaultVal) {
 
     const optRow = (text) => {
         const $o = $(`
-            <div class="wt-enum-opt" draggable="true">
+            <div class="wt-enum-opt">
                 <span class="wt-enum-grip" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></span>
                 <input type="text" class="text_pole wt-enum-text" value="${esc(text)}">
                 <button class="menu_button wt-enum-star" title="Set as default"><i class="fa-solid fa-star"></i></button>

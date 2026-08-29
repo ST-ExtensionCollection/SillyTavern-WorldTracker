@@ -447,8 +447,14 @@ body:has(#wt-inline) #extensionTopBar {
     opacity: 1;
 }
 
+.wt-char-grip:active {
+    cursor: grabbing;
+}
+
 .wt-char.wt-dragging {
-    opacity: 0.5;
+    opacity: 0.45;
+    outline: 2px dashed var(--wt-accent);
+    outline-offset: -2px;
 }
 
 .wt-char-you {
@@ -945,7 +951,9 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-cfg-row.wt-dragging {
-    opacity: 0.5;
+    opacity: 0.45;
+    outline: 2px dashed var(--wt-accent);
+    outline-offset: -2px;
 }
 
 .wt-cfg-grip {
@@ -957,6 +965,10 @@ body:has(#wt-inline) #extensionTopBar {
 
 .wt-cfg-grip:hover {
     opacity: 1;
+}
+
+.wt-cfg-grip:active {
+    cursor: grabbing;
 }
 
 .wt-cfg-row .wt-cfg-key {
@@ -1019,7 +1031,13 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-enum-opt.wt-dragging {
-    opacity: 0.5;
+    opacity: 0.45;
+    outline: 2px dashed var(--wt-accent);
+    outline-offset: -2px;
+}
+
+.wt-enum-grip:active {
+    cursor: grabbing;
 }
 
 .wt-enum-opt.wt-is-default {

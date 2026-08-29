@@ -64,10 +64,15 @@ export function makeDraggable(element, handle, ns, onEnd, excludeSelector) {
 }
 
 /**
- * Make the direct children of `listEl` matching `itemSelector` reorderable by
- * HTML5 drag-and-drop, started only from a `handleSelector` grip. Mouse only
- * (no touch), matching the enum-option editor. Items must already carry
- * `draggable="true"`. `onDrop()` fires after a reorder (read DOM order there).
+ * Make the children of `listEl` matching `itemSelector` reorderable by HTML5
+ * drag-and-drop, started only from a `handleSelector` grip. Mouse only (no
+ * touch). The dragged item is moved live as you drag over its neighbours;
+ * `onDrop()` fires once when the drag ends (read the new DOM order there).
+ *
+ * "Handle only" is done by keeping items non-draggable until a mousedown lands
+ * on a grip, then clearing that flag on release — a plain `dragstart` guard
+ * can't work because its `event.target` is the draggable item, never the grip.
+ *
  * Returns a cleanup function.
  */
 export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = {}) {
@@ -76,39 +81,55 @@ export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = 
 
     let dragEl = null;
 
+    const clearArmed = () => {
+        for (const el of list.querySelectorAll(`${itemSelector}[draggable="true"]`)) {
+            el.removeAttribute('draggable');
+        }
+    };
+    const onMouseDown = (e) => {
+        if (e.button != null && e.button !== 0) return;
+        const handle = e.target.closest(handleSelector);
+        if (!handle || !list.contains(handle)) return;
+        const item = handle.closest(itemSelector);
+        if (item && list.contains(item)) item.setAttribute('draggable', 'true');
+    };
     const onDragStart = (e) => {
         const item = e.target.closest(itemSelector);
-        if (!item || !list.contains(item) || !e.target.closest(handleSelector)) {
-            e.preventDefault();
-            return;
-        }
+        if (!item || !list.contains(item) || item.getAttribute('draggable') !== 'true') return;
         dragEl = item;
         item.classList.add('wt-dragging');
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', ''); } catch { /* IE guard */ }
+        }
     };
     const onDragOver = (e) => {
         if (!dragEl) return;
-        const over = e.target.closest(itemSelector);
-        if (!over || !list.contains(over)) return;
         e.preventDefault();
-        if (over === dragEl) return;
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        const over = e.target.closest(itemSelector);
+        if (!over || over === dragEl || !list.contains(over)) return;
         const r = over.getBoundingClientRect();
         const after = (e.clientY - r.top) > r.height / 2;
         over.parentNode.insertBefore(dragEl, after ? over.nextSibling : over);
     };
     const finish = () => {
+        clearArmed();
         if (!dragEl) return;
         dragEl.classList.remove('wt-dragging');
         dragEl = null;
         if (onDrop) onDrop();
     };
 
+    list.addEventListener('mousedown', onMouseDown);
+    list.addEventListener('mouseup', () => setTimeout(clearArmed, 0));
     list.addEventListener('dragstart', onDragStart);
     list.addEventListener('dragover', onDragOver);
     list.addEventListener('drop', (e) => { e.preventDefault(); finish(); });
     list.addEventListener('dragend', finish);
 
     return () => {
+        list.removeEventListener('mousedown', onMouseDown);
         list.removeEventListener('dragstart', onDragStart);
         list.removeEventListener('dragover', onDragOver);
         list.removeEventListener('dragend', finish);

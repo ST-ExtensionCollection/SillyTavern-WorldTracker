@@ -58,7 +58,8 @@ Switch modes from the panel's mode dropdown.
 
 - **Banner** (default): a thin strip of chips. Docks *inside* the Chat Top Bar
   when that extension is present so it looks native; otherwise it's its own row
-  above the chat. Click the chevron for the full detail sheet.
+  above the chat. Click the chevron for the full detail sheet — clicking into
+  the chat input rolls that sheet back up.
 - **Float**: a draggable, resizable window. Drag the header, resize from the
   bottom‑right grip; position and size are remembered.
 - **Dock**: a side rail (left or right, with a flip button). Collapses to a thin
@@ -124,6 +125,30 @@ characters are grouped under a collapsible **NPCs (N)**.
 
 Out‑of‑scope characters are told *"do not report this turn"* and any proposals
 for them are dropped.
+
+### Your own character
+
+A tracked character whose name matches your **persona name** is never bucketed
+as an NPC (it stays in the main list even on *Narrator*), and it stays writable
+on **every** turn regardless of its updater — so the model can remember and
+update *your* outfit / appearance from your own messages and the narration. The
+usual *"never report the player"* instruction is dropped for that name.
+
+### Bulk‑add participants
+
+The **person‑plus** button in the Characters section header (or `/wt-char sync`)
+starts tracking every current chat participant at once — every group member, or
+the character in a solo chat. The **Narrator character** is skipped (unless it's
+set to *"any turn"*); anyone already tracked is left alone.
+
+### Presence
+
+Each character card has an **eye** toggle. Marking a character *away* fades the
+card, folds its fields, and drops it below the present characters (most recently
+present first). The tracker can also set presence on its own — it's asked for a
+`present` boolean per character and proposes a change when the scene shows
+someone arrive or leave. Absent characters are tagged **(not present)** in the
+injected `[World State]` block.
 
 ### Injecting state into the chat
 
@@ -204,6 +229,8 @@ onward — so a re‑roll doesn't compound tracker changes.
 - `/wt-track` — run a tracker update now.
 - `/wt-char add <name>` / `/wt-char remove <name>` — start / stop tracking a
   character.
+- `/wt-char sync` — track every current chat participant (skips the narrator
+  unless it's *"any turn"*).
 
 ---
 
@@ -269,9 +296,9 @@ Things worth fixing or at least being aware of:
 6. **Structured output is `strict: false`** with no `additionalProperties`
    constraint — some backends ignore the schema; the tolerant parser is the
    real safety net. Turn it off if a backend errors on `json_schema`.
-7. **`/wt-char add`** doesn't validate the name against chat participants, and
-   there's no auto‑discovery of group members (the model proposing a new
-   character partly covers this).
+7. **`/wt-char add`** doesn't validate the name against chat participants
+   (`/wt-char sync` and the Characters‑header button now cover bulk discovery of
+   group members).
 8. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
    m.content`) — harmless, should be cleaned.
 9. **No timezone handling** in `clock.js` — in‑world time is fictional so it

@@ -765,25 +765,25 @@ jQuery(async () => {
     };
 
     // --- swipe safety ---
-    // MESSAGE_SWIPED fires both when a NEW swipe is about to generate (that
-    // swipe slot is still empty) and when cycling to an already-generated one.
-    // New swipe -> rewind to the pre-query snapshot; cycle -> rebuild that
-    // swipe's state from its own history records.
+    // MESSAGE_SWIPED fires both when a NEW swipe is about to generate (empty
+    // slot) and when cycling to an existing one. Either way: rebuild canonical
+    // state from that swipe's own history replayed onto the pre-query snapshot.
+    // For an empty new swipe there are no records yet, so this lands exactly on
+    // the pre-query state — a clean slate for the incoming generation. It never
+    // prunes, so sibling swipes' tracker passes survive the flip.
     const onSwiped = (rawId) => {
         const mesId = Number(rawId);
         const st = getState();
         if (!st || !Number.isFinite(mesId)) return;
         const m = SillyTavern.getContext().chat?.[mesId];
         const sid = m?.swipe_id ?? 0;
-        const populated = !!(m && Array.isArray(m.swipes) && m.swipes[sid]);
+        // Untracked message -> swiping it must not touch tracked state.
+        const tracked = (st.snapshots && (mesId in st.snapshots))
+            || (st.history || []).some((r) => r.mesId === mesId);
+        if (!tracked) { vlog(`swipe @${mesId}: untracked, ignoring`); return; }
         stopUpdate('swiped');
-        if (!populated) {
-            const r = state.restoreFrom(st, mesId);
-            log(`swipe @${mesId} (new): restored=${r.restored} usedKey=${r.usedKey}`);
-        } else {
-            const ok = state.restoreToSwipe(st, mesId, sid, settings.schema);
-            log(`swipe @${mesId} -> #${sid} (cycle): rebuilt=${ok}`);
-        }
+        const ok = state.restoreToSwipe(st, mesId, sid, settings.schema);
+        log(`swipe @${mesId} -> #${sid}: rebuilt=${ok}`);
         refresh();
     };
 
@@ -802,9 +802,7 @@ jQuery(async () => {
         }
         const m = SillyTavern.getContext().chat?.[mesId];
         const target = Number.isFinite(newSwipe) ? newSwipe : (m?.swipe_id ?? 0);
-        const populated = !!(m && Array.isArray(m.swipes) && m.swipes[target]);
-        if (populated) state.restoreToSwipe(st, mesId, target, settings.schema);
-        else state.restoreFrom(st, mesId);
+        state.restoreToSwipe(st, mesId, target, settings.schema);
         state.save();
         log(`swipe-deleted @${mesId} #${delSwipe} -> #${target}`);
         refresh();

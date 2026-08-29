@@ -7,6 +7,7 @@
 // date — WorldTracker does the date arithmetic itself.
 
 import { format } from './clock.js';
+import { isPlayerName } from './state.js';
 
 const DEFAULT_SYSTEM =
     'You are a world-state tracker for a roleplay. You receive the current world state as JSON and the recent messages. '
@@ -43,7 +44,7 @@ function currentAsJson(state, sec = {}) {
     if (names.length) {
         o.characters = {};
         for (const name of names) {
-            o.characters[name] = { present: state.characters[name].present !== false };
+            o.characters[name] = isPlayerName(name) ? {} : { present: state.characters[name].present !== false };
             for (const [fk, ff] of Object.entries(state.characters[name].fields)) {
                 o.characters[name][fk] = ff.value;
             }
@@ -115,8 +116,8 @@ export function buildResponseSchema(state, sec = {}) {
                 ff.type === 'enum' && Array.isArray(ff.options) ? { type: 'string', enum: ff.options }
                     : ff.type === 'number' ? { type: 'number' } : { type: 'string' }
             )) || { type: 'object', properties: {} };
-            fp.properties.present = { type: 'boolean' };
-            cp[name] = fp;
+            if (!isPlayerName(name)) fp.properties.present = { type: 'boolean' };
+            if (Object.keys(fp.properties).length) cp[name] = fp;
         }
         if (Object.keys(cp).length) props.characters = { type: 'object', properties: cp };
     }

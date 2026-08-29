@@ -121,7 +121,7 @@ export function diffToProposals(st, data, opts = {}) {
             if (!inScope(entry, name, authorName, narratorName, playerName)) continue;
             for (const [fk, v] of Object.entries(fields || {})) {
                 if (fk === 'present') {
-                    if (v == null) continue;
+                    if (v == null || name === playerName) continue; // the player is always present
                     const cur = entry.present !== false;
                     const nv = !!v;
                     if (nv === cur) continue;

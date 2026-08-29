@@ -39,6 +39,20 @@ function meta() {
     }
 }
 
+/** The persona (player) name, live from context. '' if unavailable. */
+export function personaName() {
+    try {
+        return globalThis.SillyTavern.getContext().name1 || '';
+    } catch {
+        return '';
+    }
+}
+
+/** True when `name` is the current persona — that character uses schema.player. */
+export function isPlayerName(name) {
+    return !!name && name === personaName();
+}
+
 export function save() {
     try {
         const c = globalThis.SillyTavern.getContext();
@@ -165,7 +179,8 @@ export function applySchema(st, schema) {
     syncScalar(st.world, schema.world, (t, f) => { t.unit = f.unit; });
     syncScalar(st.userStats, schema.userStats, (t, f) => { t.max = f.max; });
     for (const name of Object.keys(st.characters)) {
-        syncScalar(st.characters[name].fields, schema.character?.fields, (t, f) => { t.options = f.options; });
+        const defs = isPlayerName(name) ? schema.player?.fields : schema.character?.fields;
+        syncScalar(st.characters[name].fields, defs, (t, f) => { t.options = f.options; });
     }
     save();
 }
@@ -276,8 +291,9 @@ export function labelFor(path) {
 export function ensureCharacter(state, name, schema) {
     const s = schema ?? defaultSchema();
     if (!state.characters[name]) {
+        const template = isPlayerName(name) ? (s.player?.fields ?? []) : (s.character?.fields ?? []);
         const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, fields: {} };
-        for (const f of s.character?.fields ?? []) {
+        for (const f of template) {
             entry.fields[f.key] = {
                 value: f.default ?? '',
                 type: f.type ?? 'text',
@@ -298,6 +314,19 @@ export function removeCharacter(state, name) {
         delete state.characters[name];
         save();
     }
+}
+
+/**
+ * Ensure the persona has its own tracked card (seeded from schema.player).
+ * No-op when there's no persona name or the card already exists.
+ * @returns {boolean} true if a card was created
+ */
+export function ensurePlayerTracked(state, schema) {
+    if (!state) return false;
+    const name = personaName();
+    if (!name || state.characters[name]) return false;
+    ensureCharacter(state, name, schema);
+    return true;
 }
 
 /**

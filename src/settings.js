@@ -37,6 +37,9 @@ function defaultSettings() {
         bannerExpanded: false,
         // Which state groups are shown / tracked. User stats off by default.
         sections: { world: true, userStats: false, characters: true },
+        // Auto-track the persona as its own character card (name = ctx.name1),
+        // seeded from schema.player. Off => add it by hand if you want it.
+        trackPlayer: true,
         // The chat's narrator character. '' = any turn counts as the narrator's
         // (characters with updater 'narrator' then update every turn).
         narratorName: '',
@@ -86,6 +89,9 @@ export function loadSettings(extension_settings) {
     if (!Array.isArray(existing.schema.userStats)) existing.schema.userStats = ds.userStats;
     if (!existing.schema.character || !Array.isArray(existing.schema.character.fields)) {
         existing.schema.character = ds.character;
+    }
+    if (!existing.schema.player || !Array.isArray(existing.schema.player.fields)) {
+        existing.schema.player = ds.player;
     }
     if (!existing.sections || typeof existing.sections !== 'object') existing.sections = { ...defaults.sections };
     else for (const k of Object.keys(defaults.sections)) if (!(k in existing.sections)) existing.sections[k] = defaults.sections[k];

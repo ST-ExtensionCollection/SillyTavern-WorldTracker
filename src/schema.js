@@ -85,5 +85,19 @@ export function defaultSchema() {
                 { key: 'pose', label: 'Pose', type: 'text', lockedByDefault: false, default: '', group: 0 },
             ],
         },
+
+        // The player's own tracked character (the card whose name matches the
+        // persona). Its own template so it doesn't carry NPC-only fields like
+        // `relationship`. `status` holds conditions / injuries; the wardrobe
+        // group is what the model most often forgets about the player.
+        player: {
+            fields: [
+                { key: 'status', label: 'Status', type: 'text', lockedByDefault: false, default: '' },
+                { key: 'outfit', label: 'Outfit', type: 'text', lockedByDefault: false, default: '', group: 0 },
+                { key: 'stateOfDress', label: 'State of dress', type: 'text', lockedByDefault: false, default: '', group: 0 },
+                { key: 'appearance', label: 'Appearance', type: 'text', lockedByDefault: false, default: '', group: 0 },
+                { key: 'pose', label: 'Pose', type: 'text', lockedByDefault: false, default: '', group: 0 },
+            ],
+        },
     };
 }

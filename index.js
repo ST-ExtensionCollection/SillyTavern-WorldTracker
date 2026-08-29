@@ -399,6 +399,10 @@ function buildSettingsDrawer() {
                     <small class="notes">Sent as reasoning_effort. "Low" is usually plenty for extraction and much faster.</small>
                 </div>
                 <label class="checkbox_label">
+                    <input type="checkbox" id="wt-track-player">
+                    <span>Track my character (remembers your appearance &amp; conditions)</span>
+                </label>
+                <label class="checkbox_label">
                     <input type="checkbox" id="wt-auto-approve">
                     <span>Auto-approve all changes (skip review)</span>
                 </label>
@@ -475,6 +479,17 @@ function buildSettingsDrawer() {
     $locks.on('change', function () { settings.showLockIcons = this.checked; saveSettingsDebounced(); refresh(); });
     $auto.on('change', function () { settings.autoMode = this.value; saveSettingsDebounced(); });
     $approve.on('change', function () { settings.autoApprove = this.checked; saveSettingsDebounced(); });
+
+    $('#wt-track-player').prop('checked', settings.trackPlayer !== false)
+        .on('change', function () {
+            settings.trackPlayer = this.checked;
+            saveSettingsDebounced();
+            if (this.checked) {
+                const st = getState();
+                if (st && state.ensurePlayerTracked(st, settings.schema)) state.applySchema(st, settings.schema);
+            }
+            refresh();
+        });
 
     $('#wt-structured').prop('checked', settings.structuredOutput !== false)
         .on('change', function () { settings.structuredOutput = this.checked; saveSettingsDebounced(); });
@@ -577,7 +592,10 @@ jQuery(async () => {
 
         state.get(settings.schema); // seed/reconcile for the new chat
         const st = getState();
-        if (st) state.applySchema(st, settings.schema);
+        if (st) {
+            if (settings.enabled && settings.trackPlayer) state.ensurePlayerTracked(st, settings.schema);
+            state.applySchema(st, settings.schema);
+        }
         refresh();
     });
     // Group membership changed -> the "By <name>" / narrator lists depend on it.
@@ -633,6 +651,14 @@ jQuery(async () => {
     // in the DOM yet when we boot. Re-place the banner once things settle.
     if (event_types.APP_READY) eventSource.once(event_types.APP_READY, () => replaceBanner());
     setTimeout(() => replaceBanner(), 1500);
+
+    // A chat may already be open at boot (no CHAT_CHANGED fires for it).
+    try {
+        const st0 = getState();
+        if (st0 && settings.enabled && settings.trackPlayer && state.ensurePlayerTracked(st0, settings.schema)) {
+            state.applySchema(st0, settings.schema);
+        }
+    } catch (e) { vlog('boot ensurePlayerTracked failed', e); }
 
     refresh();
     log('loaded');

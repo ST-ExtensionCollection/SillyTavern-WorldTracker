@@ -431,6 +431,24 @@ body:has(#wt-inline) #extensionTopBar {
     opacity: 0.85;
 }
 
+/* The player's own card — pinned first, accented, never faded. */
+.wt-char-player {
+    border-left: 2px solid var(--wt-accent);
+}
+
+.wt-char-you {
+    font-weight: 600;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.02rem 0.28rem;
+    border: 1px solid var(--wt-accent);
+    border-radius: 4px;
+    color: var(--wt-accent);
+    opacity: 0.85;
+    vertical-align: middle;
+}
+
 /* "Track every participant" button in the Characters section header. */
 .wt-add-participants {
     margin-left: auto;

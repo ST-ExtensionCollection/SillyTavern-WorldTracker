@@ -172,7 +172,10 @@ function listSection(title, kind, list, collapsed) {
     $sec.find('.wt-cfg-add').on('click', () => $list.append(fieldRow(kind, {})));
     $sec.find('.wt-cfg-reset').on('click', () => {
         const ds = defaultSchema();
-        fill(kind === 'world' ? ds.world : kind === 'stat' ? ds.userStats : (ds.character?.fields || []));
+        fill(kind === 'world' ? ds.world
+            : kind === 'stat' ? ds.userStats
+            : kind === 'player' ? (ds.player?.fields || [])
+            : (ds.character?.fields || []));
     });
     return { $sec, $list };
 }
@@ -245,8 +248,9 @@ function buildBody(data) {
         const $b = $(`<button class="wt-pill${on ? ' wt-pill-on' : ''}" data-key="${p.key}"><i class="fa-solid ${p.icon}"></i> ${p.label}</button>`);
         $b.on('click', () => {
             $b.toggleClass('wt-pill-on');
-            const $sec = { world: world.$sec, userStats: stats.$sec, characters: chars.$sec }[p.key];
-            if ($sec) $sec.toggleClass('wt-collapsed', !$b.hasClass('wt-pill-on'));
+            const off = !$b.hasClass('wt-pill-on');
+            const secs = { world: [world.$sec], userStats: [stats.$sec], characters: [chars.$sec, player.$sec] }[p.key] || [];
+            for (const $sec of secs) if ($sec) $sec.toggleClass('wt-collapsed', off);
         });
         $pills.append($b);
     }
@@ -271,7 +275,8 @@ function buildBody(data) {
     const world = listSection('World fields', 'world', s.world || [], sec0.world === false);
     const stats = listSection('User stats', 'stat', s.userStats || [], !sec0.userStats);
     const chars = listSection('Character fields (template for each tracked NPC)', 'char', s.character?.fields || [], sec0.characters === false);
-    $c.append(world.$sec, stats.$sec, chars.$sec);
+    const player = listSection('Your character (appearance & conditions the model should remember)', 'player', s.player?.fields || [], sec0.characters === false);
+    $c.append(world.$sec, stats.$sec, chars.$sec, player.$sec);
 
     // any section head toggles its own collapse (buttons excepted)
     $c.on('click', '.wt-cfg-sec-head', function (e) {
@@ -292,6 +297,7 @@ function buildBody(data) {
             world: readRows(world.$list, 'world'),
             userStats: readRows(stats.$list, 'stat'),
             character: { ...(s.character || {}), fields: readRows(chars.$list, 'char') },
+            player: { ...(s.player || {}), fields: readRows(player.$list, 'player') },
         },
         sections: { world: pillOn('world'), userStats: pillOn('userStats'), characters: pillOn('characters') },
         narratorName: String($narr.find('.wt-narr').val() || ''),

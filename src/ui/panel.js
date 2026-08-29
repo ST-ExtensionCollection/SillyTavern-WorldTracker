@@ -358,17 +358,18 @@ function buildDetailBody() {
         ];
         const buildCard = (name) => {
             const entry = state.characters[name];
-            const absent = entry.present === false;
+            const isPlayer = !!pName && name === pName;
+            const absent = !isPlayer && entry.present === false;
             const byNames = [...new Set([...members, ...names])].filter((n) => n !== name);
             if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) byNames.push(entry.updater);
-            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}"><div class="wt-char-head">
-                <button class="wt-char-present" title="${absent ? 'Away — click to mark present' : 'Present — click to mark away'}"><i class="fa-solid ${absent ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
-                <span class="wt-char-name">${esc(name)}</span>
-                <select class="wt-updater" title="Who updates this character">
+            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}${isPlayer ? ' wt-char-player' : ''}"><div class="wt-char-head">
+                ${isPlayer ? '' : `<button class="wt-char-present" title="${absent ? 'Away — click to mark present' : 'Present — click to mark away'}"><i class="fa-solid ${absent ? 'fa-eye-slash' : 'fa-eye'}"></i></button>`}
+                <span class="wt-char-name">${esc(name)}${isPlayer ? ' <span class="wt-char-you">you</span>' : ''}</span>
+                ${isPlayer ? '' : `<select class="wt-updater" title="Who updates this character">
                     <option value="narrator"${entry.updater === 'narrator' ? ' selected' : ''}>Narrator</option>
                     <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only (${esc(name)})</option>
                     ${byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
-                </select>
+                </select>`}
                 <button class="wt-char-remove" title="Stop tracking ${esc(name)}"><i class="fa-solid fa-trash"></i></button>
             </div></div>`);
             $c.find('.wt-char-present').on('click', () => handlers.onSetPresent?.(name, absent));
@@ -382,7 +383,8 @@ function buildDetailBody() {
         };
 
         const isMain = (n) => n === pName || state.characters[n].updater !== 'narrator';
-        const mainNames = sortByPresence(names.filter(isMain));
+        const otherMain = sortByPresence(names.filter((n) => isMain(n) && n !== pName));
+        const mainNames = names.includes(pName) ? [pName, ...otherMain] : otherMain;
         const npcNames = sortByPresence(names.filter((n) => !isMain(n)));
         for (const name of mainNames) $cs.append(buildCard(name));
 

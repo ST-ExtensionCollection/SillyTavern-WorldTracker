@@ -308,10 +308,22 @@ function buildDetailBody() {
                     <option value="narrator"${entry.updater === 'narrator' ? ' selected' : ''}>Narrator</option>
                     <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only</option>
                     ${byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
+                    <option value="__custom__">By a custom name…</option>
                 </select>
                 <button class="wt-char-remove" title="Stop tracking ${esc(name)}"><i class="fa-solid fa-trash"></i></button>
             </div></div>`);
-            $c.find('.wt-updater').on('change', function () { handlers.onSetUpdater?.(name, $(this).val()); });
+            $c.find('.wt-updater').on('change', async function () {
+                if (this.value !== '__custom__') { handlers.onSetUpdater?.(name, this.value); return; }
+                const cur = ['narrator', 'self'].includes(entry.updater) ? '' : (entry.updater || '');
+                let entered;
+                try {
+                    entered = await cfg.context.Popup.show.input(`Updater for ${name}`, 'Exact author name whose turns update this character:', cur);
+                } catch {
+                    entered = window.prompt(`Author name whose turns update ${name}:`, cur);
+                }
+                const val = (entered ?? '').trim();
+                handlers.onSetUpdater?.(name, val || entry.updater || 'narrator');
+            });
             $c.find('.wt-char-remove').on('click', () => handlers.onRemoveCharacter?.(name));
             for (const [key, f] of Object.entries(entry.fields)) {
                 $c.append(fieldRow(`characters.${name}.fields.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));

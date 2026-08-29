@@ -1,8 +1,11 @@
 /* WorldTracker */
 
 :root {
-    --wt-z-dock: 3000;
-    --wt-z-float: 3020;
+    /* Above the chat (#sheld is 30) but BELOW SillyTavern's top bar / nav
+       drawers (3000-4005) so opening Extensions etc. fully covers us. */
+    --wt-z-dock: 2400;
+    --wt-z-float: 2500;
+    --wt-z-sheet: 2500;
     --wt-z-card: 30;
     --wt-bg: var(--SmartThemeBlurTintColor, #1b1b25);
     --wt-fg: var(--SmartThemeBodyColor, #e8e8e8);
@@ -190,11 +193,11 @@ body:has(#wt-inline) #extensionTopBar {
 /* ---------------- Detail sheet ---------------- */
 
 /* Fixed element on <body>, JS-positioned under the strip (see positionSheet).
-   Fixed + very high z-index avoids every clip / stacking issue from the
-   theme's treatment of #extensionTopBar and #sheld. */
+   Fixed positioning avoids clip/stacking issues from the theme's treatment
+   of #extensionTopBar and #sheld; z-index stays below ST's nav drawers. */
 #wt-sheet.wt-sheet {
     position: fixed;
-    z-index: 100000;
+    z-index: var(--wt-z-sheet);
     max-height: 60vh;
     overflow-y: auto;
     color: var(--wt-fg);

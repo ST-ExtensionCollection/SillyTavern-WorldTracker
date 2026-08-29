@@ -77,12 +77,18 @@ export function makeDraggable(element, handle, ns, onEnd, excludeSelector) {
  */
 function scrollParent(node) {
     let el = node && node.parentElement;
+    let firstScrollable = null;
     while (el) {
         const oy = getComputedStyle(el).overflowY;
-        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+        const scrollable = oy === 'auto' || oy === 'scroll' || oy === 'overlay';
+        if (scrollable && el.scrollHeight > el.clientHeight + 1) return el;
+        // Remember a container that *can* scroll even if it isn't overflowing
+        // right now (the popup body before its content is measured).
+        if (!firstScrollable && scrollable) firstScrollable = el;
+        if (el.matches?.('.popup-content, .popup-body, dialog.popup, #dialogue_popup')) return el;
         el = el.parentElement;
     }
-    return null;
+    return firstScrollable;
 }
 
 export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = {}) {
@@ -90,6 +96,35 @@ export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = 
     if (!list || !itemSelector || !handleSelector) return () => {};
 
     let dragEl = null;
+
+    // Ending a native drag inside a scroll container (the settings popup) makes
+    // the browser / the popup's focus trap yank the scroll back to the top,
+    // sometimes a frame or two after `dragend`. Rather than race it, clamp the
+    // scroll container to its drag-start offset for a short window.
+    let sc = null;
+    let scLock = 0;
+    let scGuard = false;
+    let scTimer = null;
+    const onScroll = () => {
+        if (scGuard || !sc) return;
+        scGuard = true;
+        sc.scrollTop = scLock;
+        scGuard = false;
+    };
+    const armScrollLock = () => {
+        clearTimeout(scTimer);
+        if (sc) sc.removeEventListener('scroll', onScroll);
+        sc = scrollParent(list);
+        if (!sc) return;
+        scLock = sc.scrollTop;
+        sc.addEventListener('scroll', onScroll);
+    };
+    const releaseScrollLock = () => {
+        if (!sc) return;
+        const s = sc;
+        clearTimeout(scTimer);
+        scTimer = setTimeout(() => { s.removeEventListener('scroll', onScroll); if (sc === s) sc = null; }, 500);
+    };
 
     const clearArmed = () => {
         for (const el of list.querySelectorAll(`${itemSelector}[draggable="true"]`)) {
@@ -108,6 +143,7 @@ export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = 
         if (!item || !list.contains(item) || item.getAttribute('draggable') !== 'true') return;
         dragEl = item;
         item.classList.add('wt-dragging');
+        armScrollLock();
         if (e.dataTransfer) {
             e.dataTransfer.effectAllowed = 'move';
             try { e.dataTransfer.setData('text/plain', ''); } catch { /* IE guard */ }
@@ -126,19 +162,10 @@ export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = 
     const finish = () => {
         clearArmed();
         if (!dragEl) return;
-        // Ending a native drag inside a scroll container (the settings popup)
-        // makes the browser yank the scroll position back to the source — grab
-        // the current offset and pin it back after the drop settles.
-        const sc = scrollParent(list);
-        const scTop = sc ? sc.scrollTop : 0;
         dragEl.classList.remove('wt-dragging');
         dragEl = null;
         if (onDrop) onDrop();
-        if (sc) {
-            const pin = () => { if (sc.scrollTop !== scTop) sc.scrollTop = scTop; };
-            requestAnimationFrame(pin);
-            setTimeout(pin, 0);
-        }
+        releaseScrollLock();
     };
 
     list.addEventListener('mousedown', onMouseDown);
@@ -153,6 +180,8 @@ export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = 
         list.removeEventListener('dragstart', onDragStart);
         list.removeEventListener('dragover', onDragOver);
         list.removeEventListener('dragend', finish);
+        clearTimeout(scTimer);
+        if (sc) sc.removeEventListener('scroll', onScroll);
     };
 }
 

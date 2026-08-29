@@ -452,16 +452,31 @@ body:has(#wt-inline) #extensionTopBar {
 
 .wt-char-name {
     font-weight: 700;
-    flex: 1;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
+.wt-char-rename {
+    flex: 0 0 auto;
+    padding: 0 0.1rem;
+}
+
+/* Push the updater + trash cluster to the right edge. */
 .wt-updater {
+    margin-left: auto;
     background: transparent;
     color: var(--wt-fg);
     border: 1px solid var(--wt-border);
     border-radius: 4px;
     padding: 0.1rem;
     font-size: 0.75rem;
+}
+
+.wt-char-player .wt-char-remove {
+    margin-left: auto;
 }
 
 .wt-char-remove,

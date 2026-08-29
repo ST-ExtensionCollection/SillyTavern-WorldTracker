@@ -182,11 +182,15 @@ character* setting all follow. (Snapshots keep the old name, so reverting *past*
 a rename resurrects it.) Also `/wt-char rename <old> <new>`.
 
 Cards added automatically (the persona auto‑track, **+ participants**, a
-model‑introduced NPC) are marked provisional. On a chat change, any that are
-**untouched** — no edited field, no relationship, still present, no history —
-and aren't a current participant are dropped, so switching character/persona
-doesn't leave a stale empty card behind. Edit anything on a card and it's kept
-for good.
+model‑introduced NPC) are marked provisional. On a chat change / before a
+tracker pass, any that are **untouched** — no edited field, no relationship,
+still present, no history — and aren't a current participant are dropped, so
+switching character/persona doesn't leave a stale empty card behind. Edit
+anything on a card and it's kept for good.
+
+If you swap **persona**, its card (with whatever it accumulated) is renamed to
+the new persona name automatically — no stale card, no lost data — unless the
+new name is already tracked.
 
 ### Injecting state into the chat
 

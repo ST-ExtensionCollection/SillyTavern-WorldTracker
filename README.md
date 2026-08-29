@@ -96,7 +96,9 @@ Editing the clock gives you three rows: **Set** (an absolute date/time picker),
 **Advance** (add a duration), and **Expected next** (your guess for how long the
 next reply covers). Pace presets — Fighting / Conversational / Narration /
 Classes — fill the Expected fields. On a clock proposal you can hit **exp** to
-advance by *your* expected interval instead of the model's number.
+advance by *your* expected interval instead of the model's number. If the model
+reports `0/0/0/0` elapsed (it didn't really answer), the proposal falls back to
+the Expected next interval automatically and is tagged **expected**.
 
 ### Character update ownership
 

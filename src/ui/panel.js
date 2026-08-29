@@ -196,7 +196,7 @@ function buildPendingItem(p) {
     const { handlers } = cfg;
     const $item = $(`
         <div class="wt-review-item" data-id="${esc(p.id)}">
-            <div class="wt-review-label">${esc(p.label || p.path)}</div>
+            <div class="wt-review-label">${esc(p.label || p.path)}${p.expected ? ' <span class="wt-review-tag" title="Model reported no elapsed time — using your Expected next interval">expected</span>' : ''}</div>
             <div class="wt-review-diff"><span class="wt-from">${esc(p.from ?? '—')}</span><i class="fa-solid fa-arrow-right"></i><span class="wt-to">${esc(p.to ?? '—')}</span></div>
             ${p.reason ? `<div class="wt-review-reason">${esc(p.reason)}</div>` : ''}
             <div class="wt-review-btns">

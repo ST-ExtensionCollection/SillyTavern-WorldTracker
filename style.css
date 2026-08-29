@@ -575,6 +575,18 @@ body:has(#wt-inline) #extensionTopBar {
     text-transform: capitalize;
 }
 
+.wt-review-tag {
+    font-weight: 600;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.05rem 0.3rem;
+    border: 1px solid var(--wt-border);
+    border-radius: 4px;
+    opacity: 0.7;
+    vertical-align: middle;
+}
+
 .wt-review-diff {
     grid-area: diff;
     display: flex;

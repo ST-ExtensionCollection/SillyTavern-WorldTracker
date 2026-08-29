@@ -57,9 +57,16 @@ export function diffToProposals(st, data, opts = {}) {
 
     // --- clock ---
     if (data.clock && st.clock && !st.clock.locked) {
-        const elapsed = data.clock.elapsed && typeof data.clock.elapsed === 'object'
+        let elapsed = data.clock.elapsed && typeof data.clock.elapsed === 'object'
             ? data.clock.elapsed
             : data.clock;
+        // Model reported 0/0/0/0 (or nothing usable) — it didn't really answer.
+        // Fall back to the user's "Expected next" interval so time still moves.
+        let usedExpected = false;
+        if (deltaToSeconds(elapsed) <= 0 && deltaToSeconds(st.clock.expectedInterval) > 0) {
+            elapsed = st.clock.expectedInterval;
+            usedExpected = true;
+        }
         if (deltaToSeconds(elapsed) > 0) {
             const toIso = addElapsed(st.clock.iso, elapsed);
             if (toIso !== st.clock.iso) {
@@ -68,6 +75,7 @@ export function diffToProposals(st, data, opts = {}) {
                     from: format(st.clock.iso, st.clock.displayFormat),
                     to: format(toIso, st.clock.displayFormat),
                     fromIso: st.clock.iso, toIso, elapsed,
+                    expected: usedExpected,
                     sourceMessageId,
                 });
             }

@@ -52,6 +52,12 @@ function defaultSettings() {
         // / 'char:<n>' (fields sharing a `group` digit fold into one section).
         fieldGroupCollapsed: {},
         showLockIcons: true,
+        showMessageCards: true,     // inline per-message "what changed this turn" card
+        messageCardsCollapsed: false, // start those cards' delta list collapsed
+        relsCollapsed: true,        // collapse the per-character Relationships block
+
+        // --- history ---
+        // (turn-history log itself lives in per-chat state, not here)
 
         // --- injection into the main chat ---
         injectState: true,          // feed the tracked state to the roleplay model

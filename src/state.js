@@ -123,8 +123,7 @@ function reconcile(state, schema) {
     if (!state.snapshots || typeof state.snapshots !== 'object') state.snapshots = {};
     if (!Array.isArray(state.history)) state.history = [];
     for (const name of Object.keys(state.characters)) {
-        const t = name.trim().toLowerCase();
-        if (!name.trim() || t === 'null' || t === 'undefined') { delete state.characters[name]; continue; }
+        if (!name.trim()) { delete state.characters[name]; continue; } // empty key = junk
         const c = state.characters[name];
         if (!c.rels || typeof c.rels !== 'object') c.rels = {};
     }

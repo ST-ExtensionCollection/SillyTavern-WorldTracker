@@ -10,10 +10,9 @@ import { inScope } from './prompt.js';
 import { RELATIONSHIP_OPTIONS } from './schema.js';
 import * as state from './state.js';
 
-/** A usable character name — not empty, not a stringified null/undefined. */
+/** A usable character name — just non-empty (a real name like "Null" is fine). */
 function isRealName(n) {
-    const s = String(n ?? '').trim();
-    return !!s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined';
+    return !!String(n ?? '').trim();
 }
 
 /** Loose equality for field values (trim strings, compare numbers numerically). */

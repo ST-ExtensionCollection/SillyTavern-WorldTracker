@@ -144,10 +144,11 @@ async function openEnumEditor(options, defaultVal) {
     return { options: outOpts, default: def };
 }
 
-function listSection(title, kind, list) {
+function listSection(title, kind, list, collapsed) {
     const $sec = $(`
-        <div class="wt-cfg-sec">
-            <div class="wt-cfg-sec-head">${title}
+        <div class="wt-cfg-sec${collapsed ? ' wt-collapsed' : ''}">
+            <div class="wt-cfg-sec-head">
+                <span class="wt-cfg-head-label"><i class="wt-cfg-chevron fa-solid fa-chevron-down"></i> ${title}</span>
                 <span class="wt-cfg-sec-actions">
                     <button class="menu_button wt-cfg-add"><i class="fa-solid fa-plus"></i> Add</button>
                     <button class="menu_button wt-cfg-reset" title="Reset this list to defaults"><i class="fa-solid fa-rotate-left"></i></button>
@@ -211,9 +212,12 @@ function buildBody(data) {
     const members = groupMemberNames();
     const curNarr = data.narratorName || '';
     const narrOpts = [...new Set(members.concat(curNarr && !members.includes(curNarr) ? [curNarr] : []))];
+    const head = (title, actions = '') =>
+        `<div class="wt-cfg-sec-head"><span class="wt-cfg-head-label"><i class="wt-cfg-chevron fa-solid fa-chevron-down"></i> ${title}</span>${actions ? `<span class="wt-cfg-sec-actions">${actions}</span>` : ''}</div>`;
+
     const $narr = $(`
         <div class="wt-cfg-sec">
-            <div class="wt-cfg-sec-head">Narrator character</div>
+            ${head('Narrator character')}
             <select class="text_pole wt-narr">
                 <option value=""${curNarr ? '' : ' selected'}>(any turn)</option>
                 ${narrOpts.map((n) => `<option value="${esc(n)}"${n === curNarr ? ' selected' : ''}>${esc(n)}</option>`).join('')}
@@ -228,19 +232,19 @@ function buildBody(data) {
     for (const p of SECTION_PILLS) {
         const on = p.key === 'userStats' ? !!sec0.userStats : sec0[p.key] !== false;
         const $b = $(`<button class="wt-pill${on ? ' wt-pill-on' : ''}" data-key="${p.key}"><i class="fa-solid ${p.icon}"></i> ${p.label}</button>`);
-        $b.on('click', () => $b.toggleClass('wt-pill-on'));
+        $b.on('click', () => {
+            $b.toggleClass('wt-pill-on');
+            const $sec = { world: world.$sec, userStats: stats.$sec, characters: chars.$sec }[p.key];
+            if ($sec) $sec.toggleClass('wt-collapsed', !$b.hasClass('wt-pill-on'));
+        });
         $pills.append($b);
     }
-    $c.append($(`<div class="wt-cfg-sec"><div class="wt-cfg-sec-head">Show &amp; track
-        <span class="wt-cfg-sec-actions"><button class="menu_button wt-cfg-restore-all"><i class="fa-solid fa-rotate-left"></i> Restore all defaults</button></span>
-    </div></div>`).append($pills));
+    $c.append($(`<div class="wt-cfg-sec">${head('Show &amp; track', '<button class="menu_button wt-cfg-restore-all"><i class="fa-solid fa-rotate-left"></i> Restore all defaults</button>')}</div>`).append($pills));
 
     // clock
     const $clock = $(`
         <div class="wt-cfg-sec">
-            <div class="wt-cfg-sec-head">Clock
-                <span class="wt-cfg-sec-actions"><button class="menu_button wt-clk-reset" title="Reset clock to defaults"><i class="fa-solid fa-rotate-left"></i></button></span>
-            </div>
+            ${head('Clock', '<button class="menu_button wt-clk-reset" title="Reset clock to defaults"><i class="fa-solid fa-rotate-left"></i></button>')}
             <label>Display format <input type="text" class="text_pole wt-clk-fmt" value="${esc(s.clock?.displayFormat)}"></label>
             <label>Start date/time <input type="datetime-local" class="text_pole wt-clk-start" value="${(s.clock?.startIso || '2024-06-01T09:00:00').slice(0, 16)}"></label>
         </div>
@@ -252,11 +256,17 @@ function buildBody(data) {
     });
     $c.append($clock);
 
-    // field lists
-    const world = listSection('World fields', 'world', s.world || []);
-    const stats = listSection('User stats', 'stat', s.userStats || []);
-    const chars = listSection('Character fields (template for each tracked NPC)', 'char', s.character?.fields || []);
+    // field lists — start collapsed if the matching section pill is off
+    const world = listSection('World fields', 'world', s.world || [], sec0.world === false);
+    const stats = listSection('User stats', 'stat', s.userStats || [], !sec0.userStats);
+    const chars = listSection('Character fields (template for each tracked NPC)', 'char', s.character?.fields || [], sec0.characters === false);
     $c.append(world.$sec, stats.$sec, chars.$sec);
+
+    // any section head toggles its own collapse (buttons excepted)
+    $c.on('click', '.wt-cfg-sec-head', function (e) {
+        if ($(e.target).closest('button, select, input, a').length) return;
+        $(this).closest('.wt-cfg-sec').toggleClass('wt-collapsed');
+    });
 
     const pillOn = (k) => $pills.find(`.wt-pill[data-key="${k}"]`).hasClass('wt-pill-on');
 
@@ -304,7 +314,7 @@ export async function openSettingsModal(ctx, settings, persist) {
     const $wrap = $('<div class="wt-cfg"></div>');
     const $bar = $(`
         <div class="wt-cfg-sec wt-profile-bar">
-            <div class="wt-cfg-sec-head">Profile</div>
+            <div class="wt-cfg-sec-head"><span class="wt-cfg-head-label"><i class="wt-cfg-chevron fa-solid fa-chevron-down"></i> Profile</span></div>
             <div class="wt-profile-row">
                 <select class="text_pole wt-prof-select"></select>
                 <button class="menu_button wt-prof-bind" title="Lock this profile to the current chat / group"><i class="fa-solid fa-lock-open"></i></button>
@@ -319,6 +329,11 @@ export async function openSettingsModal(ctx, settings, persist) {
     `);
     const $bodyHost = $('<div class="wt-cfg-body-host"></div>').append(body.$c);
     $wrap.append($bar, $bodyHost);
+
+    $bar.find('.wt-cfg-sec-head').on('click', (e) => {
+        if ($(e.target).closest('button, select, input').length) return;
+        $bar.toggleClass('wt-collapsed');
+    });
 
     const rebuild = (data) => {
         working = data;

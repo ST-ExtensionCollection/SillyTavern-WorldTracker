@@ -65,7 +65,8 @@ Switch modes from the panel's mode dropdown.
   edge.
 
 Float and dock fall back to the banner on narrow screens (≤ 1000 px). The panel
-is hidden entirely when no chat is open.
+is hidden entirely when no chat is open, and sits below SillyTavern's nav
+drawers — opening the Extensions panel etc. covers it.
 
 ### Locking
 
@@ -99,11 +100,18 @@ advance by *your* expected interval instead of the model's number.
 
 ### Character update ownership
 
-Each tracked character has an **updater**:
+Each tracked character has an **updater** (dropdown on its card in the detail
+sheet):
 
-- **Narrator** (default) — updated on any turn;
-- **Self only** — updated only on a turn that character authored;
-- **By \<name\>** — updated only on that character's turn.
+- **Narrator** (default) — updated on the narrator's turns. If no narrator
+  character is set (gear dialog → *Narrator character*, default *"any turn"*),
+  this means every turn.
+- **Self only (\<name\>)** — updated only on a turn that character authored.
+- **By \<name\>** — updated only on that named author's turns. The list is
+  populated from the current group's members plus your other tracked
+  characters; pick **By a custom name…** to match any author name (useful when
+  the "characters" are voiced by a single narrator card rather than being real
+  group members).
 
 Out‑of‑scope characters are told *"do not report this turn"* and any proposals
 for them are dropped.
@@ -118,11 +126,14 @@ sees the values you've accepted.
 
 The **gear** button on the panel opens the schema editor:
 
-- toggle whole groups on/off — **World fields**, **User stats**, **Characters**.
+- **Narrator character** — which group member counts as the narrator for the
+  "Narrator" updater (default *"any turn"*).
+- section pills — toggle **World fields**, **User stats**, **Characters** on/off.
   **User stats are off by default** (like RPG Companion); flip the pill to get
   Health/Energy back.
 - add / remove / rename fields, pick a type (`text` / `number` / `enum`), set a
-  unit / enum options / max.
+  unit / enum options / max. An enum's default is kept across edits as long as
+  it stays a valid option.
 - edit the clock display format and start time.
 - reset buttons per list, plus *Restore all defaults*.
 

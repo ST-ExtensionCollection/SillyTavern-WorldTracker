@@ -15,14 +15,15 @@
 //       }
 //     },
 //     pending: [ { id, path, label, from, to, reason, sourceMessageId, ts } ],
-//     _v: 1
+//     history: [ { id, mesId, swipeId, ts, trigger, changes: [ {path,label,kind,before,after,rawBefore,rawAfter,beforeIso?,afterIso?} ] } ],
+//     _v: 2
 //   }
 
 import { defaultSchema, normGroup, UPDATER_NARRATOR } from './schema.js';
 import { vlog, warn } from './log.js';
 
 export const META_KEY = 'WorldTracker';
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 
 export function init() {
     // No caching — chat_metadata is REASSIGNED by ST on every chat change, so
@@ -120,6 +121,7 @@ function reconcile(state, schema) {
     if (!state.characters) state.characters = {};
     if (!Array.isArray(state.pending)) state.pending = [];
     if (!state.snapshots || typeof state.snapshots !== 'object') state.snapshots = {};
+    if (!Array.isArray(state.history)) state.history = [];
     for (const f of s.world ?? []) {
         if (!state.world[f.key]) {
             state.world[f.key] = { value: f.default ?? '', type: f.type ?? 'text', unit: f.unit, group: normGroup(f.group), locked: !!f.lockedByDefault, lastChangedBy: null };
@@ -217,7 +219,7 @@ export function snapshot(st, index) {
  * @returns {{restored:boolean, usedKey:number|null, prunedPending:number, prunedSnaps:number}}
  */
 export function restoreFrom(st, index) {
-    const result = { restored: false, usedKey: null, prunedPending: 0, prunedSnaps: 0 };
+    const result = { restored: false, usedKey: null, prunedPending: 0, prunedSnaps: 0, prunedHistory: 0 };
     if (!st) return result;
     if (!st.snapshots || typeof st.snapshots !== 'object') st.snapshots = {};
 
@@ -235,10 +237,45 @@ export function restoreFrom(st, index) {
     const before = (st.pending || []).length;
     st.pending = (st.pending || []).filter((p) => !(Number.isInteger(p.sourceMessageId) && p.sourceMessageId >= index));
     result.prunedPending = before - st.pending.length;
+    result.prunedHistory = pruneHistory(st, index);
 
-    vlog(`restoreFrom(${index}): all snapshot keys were [${Object.keys(st.snapshots).join(',')}], used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps`);
+    vlog(`restoreFrom(${index}): all snapshot keys were [${Object.keys(st.snapshots).join(',')}], used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps / ${result.prunedHistory} history`);
     save();
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Non-destructive snapshot read + per-swipe reconstruction
+// ---------------------------------------------------------------------------
+
+/** Deep copy of the nearest snapshot with key <= index, or null. No mutation. */
+export function peekSnapshot(state, index) {
+    if (!state || !state.snapshots || typeof state.snapshots !== 'object') return null;
+    const key = Object.keys(state.snapshots).map(Number).filter((k) => k <= index).sort((a, b) => b - a)[0];
+    if (key == null) return null;
+    const snap = state.snapshots[key];
+    if (!snap) return null;
+    const out = {};
+    for (const k of SNAPSHOT_KEYS) if (snap[k] != null) out[k] = deepCopy(snap[k]);
+    return out;
+}
+
+/**
+ * Rebuild canonical state for message `mesId`'s swipe `swipeId`: start from the
+ * pre-query snapshot, then replay every history record tagged with that
+ * (mesId, swipeId). Non-destructive — does NOT prune snapshots/pending/history.
+ */
+export function restoreToSwipe(state, mesId, swipeId, schema) {
+    const base = peekSnapshot(state, mesId);
+    if (!base) { warn('restoreToSwipe: no base snapshot for', mesId); return false; }
+    for (const k of SNAPSHOT_KEYS) if (base[k] != null) state[k] = deepCopy(base[k]);
+    const recs = (state.history || [])
+        .filter((r) => r.mesId === mesId && r.swipeId === swipeId)
+        .sort((a, b) => a.ts - b.ts);
+    for (const r of recs) for (const ch of r.changes || []) applyChange(state, ch, schema);
+    save();
+    vlog(`restoreToSwipe(${mesId}, ${swipeId}): replayed ${recs.length} record(s)`);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,8 +316,116 @@ export function setLock(state, path, locked) {
 export function labelFor(path) {
     if (path === 'clock') return 'Time';
     const parts = path.split('.');
-    if (parts[0] === 'characters') return `${parts[1]} · ${parts[3] ?? ''}`.trim();
+    if (parts[0] === 'characters') {
+        if (parts[2] === 'present') return `${parts[1]} · presence`;
+        if (parts[2] === 'rels') return `${parts[1]} → ${parts.slice(3).join('.')}`;
+        return `${parts[1]} · ${parts[3] ?? ''}`.trim();
+    }
     return parts[parts.length - 1];
+}
+
+// ---------------------------------------------------------------------------
+// Turn-history log
+// ---------------------------------------------------------------------------
+
+let historySeq = 0;
+const HISTORY_CAP = 120;
+
+/**
+ * Append a turn record. `rec` = { mesId?, swipeId?, trigger, changes: [...] }.
+ * Each change: { path, label, kind, before, after, rawBefore, rawAfter, beforeIso?, afterIso? }.
+ */
+export function pushHistory(state, rec) {
+    if (!state || !rec || !Array.isArray(rec.changes) || !rec.changes.length) return null;
+    if (!Array.isArray(state.history)) state.history = [];
+    const entry = {
+        id: `h${Date.now()}_${historySeq++}`,
+        ts: Date.now(),
+        mesId: Number.isInteger(rec.mesId) ? rec.mesId : null,
+        swipeId: Number.isInteger(rec.swipeId) ? rec.swipeId : null,
+        trigger: rec.trigger || 'edit',
+        changes: rec.changes,
+    };
+    state.history.push(entry);
+    while (state.history.length > HISTORY_CAP) state.history.shift();
+    save();
+    return entry;
+}
+
+/** Drop history records whose source message index is >= fromIndex. Returns count removed. */
+export function pruneHistory(state, fromIndex) {
+    if (!state || !Array.isArray(state.history)) return 0;
+    const before = state.history.length;
+    state.history = state.history.filter((r) => !(Number.isInteger(r.mesId) && r.mesId >= fromIndex));
+    return before - state.history.length;
+}
+
+/**
+ * Prior values seen for `path`, newest first (each = the `rawBefore` of a change
+ * that touched it). Skips the current value and dedupes consecutive repeats.
+ */
+export function fieldHistory(state, path, limit = 10) {
+    if (!state || !Array.isArray(state.history)) return [];
+    const cur = path === 'clock' ? state.clock?.iso : fieldAt(state, path)?.value;
+    const out = [];
+    for (let i = state.history.length - 1; i >= 0 && out.length < limit; i--) {
+        for (const ch of state.history[i].changes || []) {
+            if (ch.path !== path) continue;
+            const v = ch.rawBefore;
+            if (v == null) continue;
+            if (String(v) === String(cur)) continue;
+            const last = out[out.length - 1];
+            if (last && String(last.value) === String(v)) continue;
+            out.push({ value: v, iso: ch.beforeIso, ts: state.history[i].ts, mesId: state.history[i].mesId });
+            if (out.length >= limit) break;
+        }
+    }
+    return out;
+}
+
+/**
+ * Apply one history change's `rawAfter` to canonical state. Shared by
+ * applyProposal, per-swipe replay, and revert-turn (which passes a change whose
+ * rawAfter is the value to land on). Mirrors applyProposal's per-kind mutations.
+ */
+export function applyChange(state, ch, schema) {
+    if (!ch || !ch.path) return;
+    if (ch.kind === 'clock' || ch.path === 'clock') {
+        state.clock.iso = ch.afterIso ?? ch.rawAfter;
+        save();
+        return;
+    }
+    if (ch.kind === 'presence') {
+        const e = state.characters[ch.path.split('.')[1]];
+        if (e) { e.present = !!ch.rawAfter; if (!e.present) e.lastPresentTs = Date.now(); }
+        save();
+        return;
+    }
+    if (ch.kind === 'rel') {
+        const parts = ch.path.split('.'); // characters, <name>, rels, <obj...>
+        const e = state.characters[parts[1]];
+        if (e) {
+            if (!e.rels) e.rels = {};
+            const obj = parts.slice(3).join('.');
+            if (ch.rawAfter == null || ch.rawAfter === '') delete e.rels[obj];
+            else e.rels[obj] = ch.rawAfter;
+        }
+        save();
+        return;
+    }
+    if (ch.kind === 'new-character') {
+        const nc = ch.rawAfter || {};
+        if (!nc.name) return;
+        const e = ensureCharacter(state, nc.name, schema);
+        for (const [fk, v] of Object.entries(nc.fields || {})) {
+            if (fk === 'present') { e.present = v !== false; continue; }
+            const f = e.fields[fk];
+            if (f && !f.locked && v != null) f.value = f.type === 'number' ? Number(v) : v;
+        }
+        save();
+        return;
+    }
+    applyValue(state, ch.path, ch.rawAfter, null);
 }
 
 // ---------------------------------------------------------------------------

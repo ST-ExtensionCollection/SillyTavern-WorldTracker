@@ -142,24 +142,57 @@ export function diffToProposals(st, data, opts = {}) {
     return out;
 }
 
-/** Commit one proposal to the canonical state. */
+/**
+ * Commit one proposal to the canonical state.
+ * @returns a history change `{ path, label, kind, before, after, rawBefore, rawAfter, beforeIso?, afterIso? }`
+ *          (or null). Callers collect these into one `pushHistory` record per batch.
+ */
 export function applyProposal(st, p, schema) {
-    if (!p) return;
+    if (!p) return null;
+
     if (p.kind === 'clock') {
+        const beforeIso = st.clock.iso;
         st.clock.iso = p.toIso;
         state.save();
-        return;
+        return {
+            path: 'clock', label: 'Time', kind: 'clock',
+            before: format(beforeIso, st.clock.displayFormat), after: format(p.toIso, st.clock.displayFormat),
+            beforeIso, afterIso: p.toIso, rawBefore: beforeIso, rawAfter: p.toIso,
+        };
     }
+
     if (p.kind === 'presence') {
-        const name = p.path.split('.')[1];
-        const entry = st.characters[name];
+        const entry = st.characters[p.path.split('.')[1]];
+        const was = entry ? entry.present !== false : true;
         if (entry) {
             entry.present = !!p.rawTo;
             if (!entry.present) entry.lastPresentTs = Date.now();
         }
         state.save();
-        return;
+        return {
+            path: p.path, label: p.label, kind: 'presence',
+            before: was ? 'present' : 'away', after: p.rawTo ? 'present' : 'away',
+            rawBefore: was, rawAfter: !!p.rawTo,
+        };
     }
+
+    if (p.kind === 'rel') {
+        const parts = p.path.split('.'); // characters, <name>, rels, <obj...>
+        const entry = st.characters[parts[1]];
+        const obj = parts.slice(3).join('.');
+        const was = entry?.rels?.[obj];
+        if (entry) {
+            if (!entry.rels) entry.rels = {};
+            if (p.rawTo == null || p.rawTo === '') delete entry.rels[obj];
+            else entry.rels[obj] = p.rawTo;
+        }
+        state.save();
+        return {
+            path: p.path, label: p.label, kind: 'rel',
+            before: was || '—', after: p.rawTo || '—', rawBefore: was ?? '', rawAfter: p.rawTo ?? '',
+        };
+    }
+
     if (p.kind === 'new-character') {
         const entry = state.ensureCharacter(st, p.rawTo.name, schema);
         for (const [fk, v] of Object.entries(p.rawTo.fields || {})) {
@@ -168,7 +201,19 @@ export function applyProposal(st, p, schema) {
             if (f && !f.locked && v != null) f.value = coerce(f, v);
         }
         state.save();
-        return;
+        return {
+            path: p.path, label: p.label, kind: 'new-character',
+            before: '—', after: p.rawTo.name, rawBefore: null, rawAfter: p.rawTo,
+        };
     }
+
+    // field
+    const f = state.fieldAt(st, p.path);
+    const rawBefore = f ? f.value : undefined;
+    const before = f ? displayVal(f, f.value) : (p.from ?? '—');
     state.applyValue(st, p.path, p.rawTo ?? p.to, p.sourceMessageId);
+    return {
+        path: p.path, label: p.label, kind: 'field',
+        before, after: p.to, rawBefore, rawAfter: p.rawTo ?? p.to,
+    };
 }

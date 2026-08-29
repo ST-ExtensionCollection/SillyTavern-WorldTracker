@@ -289,19 +289,16 @@ function buildDetailBody() {
         $body.append($us);
     }
 
-    // Characters
+    // Characters — main (self / by-name) up top, narrator-run NPCs in a
+    // collapsible group below.
     const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         const $cs = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
         const members = groupMemberNames();
-        for (const name of names) {
+        const buildCard = (name) => {
             const entry = state.characters[name];
-            // "By X" options = group members + other tracked characters + the
-            // current value (so a stale updater still shows), minus self.
             const byNames = [...new Set([...members, ...names])].filter((n) => n !== name);
-            if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) {
-                byNames.push(entry.updater);
-            }
+            if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) byNames.push(entry.updater);
             const $c = $(`<div class="wt-char"><div class="wt-char-head">
                 <span class="wt-char-name">${esc(name)}</span>
                 <select class="wt-updater" title="Who updates this character">
@@ -316,7 +313,25 @@ function buildDetailBody() {
             for (const [key, f] of Object.entries(entry.fields)) {
                 $c.append(fieldRow(`characters.${name}.fields.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
             }
-            $cs.append($c);
+            return $c;
+        };
+
+        const mainNames = names.filter((n) => state.characters[n].updater !== 'narrator');
+        const npcNames = names.filter((n) => state.characters[n].updater === 'narrator');
+        for (const name of mainNames) $cs.append(buildCard(name));
+
+        if (npcNames.length) {
+            const collapsed = !!settings.npcCollapsed;
+            const $g = $(`<div class="wt-npc-group${collapsed ? ' wt-collapsed' : ''}">
+                <button class="wt-npc-toggle"><i class="fa-solid ${collapsed ? 'fa-chevron-right' : 'fa-chevron-down'}"></i> NPCs (${npcNames.length})</button>
+                <div class="wt-npc-list"></div>
+            </div>`);
+            $g.find('.wt-npc-toggle').on('click', () => handlers.onToggleNpc?.(!collapsed));
+            if (!collapsed) {
+                const $list = $g.find('.wt-npc-list');
+                for (const name of npcNames) $list.append(buildCard(name));
+            }
+            $cs.append($g);
         }
         $body.append($cs);
     }

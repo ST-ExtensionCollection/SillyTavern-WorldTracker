@@ -99,11 +99,14 @@ export function diffToProposals(st, data, opts = {}) {
         for (const [name, fields] of Object.entries(data.characters)) {
             const entry = st.characters[name];
             if (!entry) {
-                out.push({
-                    path: `characters.${name}`, kind: 'new-character', label: `Track ${name}`,
-                    from: '—', to: name, rawTo: { name, fields: fields || {} },
-                    sourceMessageId,
-                });
+                // Only the narrator introduces new NPCs.
+                if (inScope({ updater: 'narrator' }, name, authorName, narratorName)) {
+                    out.push({
+                        path: `characters.${name}`, kind: 'new-character', label: `Track ${name}`,
+                        from: '—', to: name, rawTo: { name, fields: fields || {} },
+                        sourceMessageId,
+                    });
+                }
                 continue;
             }
             // Ownership: skip characters that aren't this turn's to update.

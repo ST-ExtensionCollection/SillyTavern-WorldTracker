@@ -403,6 +403,34 @@ body:has(#wt-inline) #extensionTopBar {
     opacity: 1;
 }
 
+.wt-npc-group {
+    margin-top: 0.3rem;
+}
+
+.wt-npc-toggle {
+    background: transparent;
+    border: 1px dashed var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 6px;
+    width: 100%;
+    text-align: left;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.wt-npc-toggle:hover {
+    opacity: 1;
+}
+
+.wt-npc-list {
+    margin-top: 0.4rem;
+}
+
 /* ---------------- Review queue + inline card ---------------- */
 
 .wt-review {

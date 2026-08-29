@@ -44,6 +44,7 @@ function defaultSettings() {
         floatSize: { w: 340, h: 420 },
         dockSide: 'right',          // 'left' | 'right'
         panelCollapsed: false,      // roll-up for float / dock modes
+        npcCollapsed: false,        // collapse the narrator-run NPC character group
         showLockIcons: true,
 
         // --- injection into the main chat ---

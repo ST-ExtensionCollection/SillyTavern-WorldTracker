@@ -380,15 +380,21 @@ function buildDetailBody() {
 
     const showLock = settings.showLockIcons !== false;
     const sec = settings.sections || {};
-    const onEdit = (path, val) => handlers.onEdit?.(path, val);
+    const onEdit = (path, val, o) => handlers.onEdit?.(path, val, o);
     const onToggleLock = (path, locked) => handlers.onToggleLock?.(path, locked);
+    const histFor = (path) => { try { return handlers.fieldHistory?.(path) || []; } catch { return []; } };
+    const rowOpts = (path, label) => ({
+        showLock, label, onEdit, onToggleLock,
+        history: histFor(path),
+        onPickHistory: (v) => handlers.onEdit?.(path, path === 'clock' ? { __setIso: v } : v, { trigger: 'scrub' }),
+    });
 
     // World section (clock always; world fields gated by the section toggle)
     const $world = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-earth-americas"></i> World</div>');
-    $world.append(fieldRow('clock', state.clock, state, { showLock, label: 'Time', onEdit, onToggleLock }));
+    $world.append(fieldRow('clock', state.clock, state, rowOpts('clock', 'Time')));
     if (sec.world !== false) {
         appendFieldRows($world, Object.entries(state.world), 'world',
-            (key, f) => fieldRow(`world.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
+            (key, f) => fieldRow(`world.${key}`, f, state, rowOpts(`world.${key}`, key)));
     }
     $body.append($world);
 
@@ -396,7 +402,7 @@ function buildDetailBody() {
     if (sec.userStats && Object.keys(state.userStats).length) {
         const $us = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-user"></i> You</div>');
         appendFieldRows($us, Object.entries(state.userStats), 'stat',
-            (key, f) => fieldRow(`userStats.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
+            (key, f) => fieldRow(`userStats.${key}`, f, state, rowOpts(`userStats.${key}`, key)));
         $body.append($us);
     }
 
@@ -445,7 +451,7 @@ function buildDetailBody() {
             $c.find('.wt-char-remove').on('click', () => handlers.onRemoveCharacter?.(name));
             const $fields = $('<div class="wt-char-fields"></div>');
             appendFieldRows($fields, Object.entries(entry.fields), 'char',
-                (key, f) => fieldRow(`characters.${name}.fields.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
+                (key, f) => fieldRow(`characters.${name}.fields.${key}`, f, state, rowOpts(`characters.${name}.fields.${key}`, key)));
             $c.append($fields);
             return $c;
         };

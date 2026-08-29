@@ -223,6 +223,9 @@ Every applied change (tracker‑approved or hand‑edited) is appended to a per�
   read‑only `old → new` list for the message's *active swipe*, plus **Revert
   turn** (undo everything that turn did) and **State as of here** (the
   `[World State]` block reconstructed for that point).
+- Every field row with a past value gets a **⟲** button — a dropdown of prior
+  values (with the message # and how long ago) to restore in one click. Handy
+  for "put the outfit back after the gym scene" or undoing a bad accept.
 - Deleting a message or swipe prunes the log from there on, same as snapshots.
 
 ### Swipe / regenerate / delete safety

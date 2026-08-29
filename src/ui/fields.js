@@ -9,22 +9,60 @@
 //   { __expected: {days,hours,minutes} } save the "expected next reply" interval
 
 import { displayValue, esc, iconFor } from './format.js';
-import { toIso } from '../clock.js';
+import { toIso, format } from '../clock.js';
 
 // ST-native classes so inputs/buttons pick up the active theme.
 const INP = 'text_pole wt-inp';
 const BTN = 'menu_button wt-btn-sm';
 
+function relTime(ts) {
+    if (!ts) return '';
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 45) return 'just now';
+    if (s < 3600) return `${Math.round(s / 60)}m ago`;
+    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return `${Math.round(s / 86400)}d ago`;
+}
+
+function closeHistMenu() {
+    $('.wt-hist-menu').remove();
+    $(document).off('.wtHist');
+}
+
+function openHistMenu($row, history, clockFmt, onPick) {
+    closeHistMenu();
+    const $menu = $('<div class="wt-hist-menu"></div>');
+    for (const h of history) {
+        const disp = clockFmt ? format(h.iso || h.value, clockFmt) : String(h.value);
+        const meta = [h.mesId != null ? `msg ${h.mesId}` : null, relTime(h.ts)].filter(Boolean).join(' · ');
+        const $o = $('<button class="wt-hist-opt" type="button"><span class="wt-hist-val"></span><small class="wt-hist-meta"></small></button>');
+        $o.find('.wt-hist-val').text(disp);
+        $o.find('.wt-hist-meta').text(meta);
+        $o.on('click', (e) => { e.stopPropagation(); onPick(h.value); closeHistMenu(); });
+        $menu.append($o);
+    }
+    $row.append($menu);
+    setTimeout(() => {
+        $(document).on('mousedown.wtHist', (e) => {
+            if (!$('.wt-hist-menu').length) { $(document).off('.wtHist'); return; } // orphaned by a re-render
+            if (!$(e.target).closest('.wt-hist-menu, .wt-hist-btn').length) closeHistMenu();
+        });
+        $(document).on('keydown.wtHist', (e) => { if (e.key === 'Escape') closeHistMenu(); });
+    }, 0);
+}
+
 export function fieldRow(path, field, state, opts = {}) {
-    const { showLock = true, label, onEdit, onToggleLock, extraControlHtml = '' } = opts;
+    const { showLock = true, label, onEdit, onToggleLock, extraControlHtml = '', history = null, onPickHistory = null } = opts;
     const isClock = path === 'clock';
     const locked = !!(field && field.locked);
+    const hasHist = !!(history && history.length && onPickHistory);
     const $row = $(`
         <div class="wt-field-row${locked ? ' wt-locked' : ''}" data-path="${esc(path)}">
             <span class="wt-field-ico"><i class="fa-solid ${iconFor(label || path.split('.').pop())}"></i></span>
             <span class="wt-field-label">${esc(label || path.split('.').pop())}</span>
             <span class="wt-field-value" tabindex="0" role="button" title="Click to edit">${esc(displayValue(path, field, state))}</span>
             ${extraControlHtml}
+            ${hasHist ? '<button class="wt-hist-btn" title="Restore a previous value"><i class="fa-solid fa-clock-rotate-left"></i></button>' : ''}
             ${showLock ? `<button class="wt-lock-btn" title="${locked ? 'Locked — click to unlock' : 'Unlocked — click to lock'}"><i class="fa-solid ${locked ? 'fa-lock' : 'fa-lock-open'}"></i></button>` : ''}
         </div>
     `);
@@ -140,6 +178,14 @@ export function fieldRow(path, field, state, opts = {}) {
     if (showLock) {
         $row.find('.wt-lock-btn').on('click', () => {
             onToggleLock && onToggleLock(path, !locked);
+        });
+    }
+
+    if (hasHist) {
+        $row.find('.wt-hist-btn').on('click', (e) => {
+            e.stopPropagation();
+            if ($row.find('.wt-hist-menu').length) { closeHistMenu(); return; }
+            openHistMenu($row, history, isClock ? state.clock.displayFormat : null, onPickHistory);
         });
     }
 

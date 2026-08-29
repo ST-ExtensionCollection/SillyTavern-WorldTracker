@@ -4,7 +4,7 @@
 // clock format) and the section toggles. On Save it hands back the rebuilt
 // schema + sections; the caller persists and re-seeds the current chat.
 
-import { defaultSchema } from '../schema.js';
+import { defaultSchema, normGroup } from '../schema.js';
 import { groupMemberNames } from './panel.js';
 import * as profiles from '../profiles.js';
 
@@ -26,6 +26,14 @@ function refreshEnumBtn($r) {
     $r.find('.wt-enum-summary').text(enumSummary($r.data('enumOptions') || [], $r.data('enumDefault') || ''));
 }
 
+/** "Collapsible #" picker: – or a digit 0-9 (fields sharing a digit fold together). */
+function groupSelectHtml(f) {
+    const g = normGroup(f.group);
+    let opts = '<option value="">–</option>';
+    for (let i = 0; i <= 9; i++) opts += `<option value="${i}"${g === i ? ' selected' : ''}>${i}</option>`;
+    return `<select class="text_pole wt-cfg-group" title="Collapsible #: fields sharing a digit fold into one collapsible group (– = its own row)">${opts}</select>`;
+}
+
 function fieldRow(kind, f = {}) {
     const isStat = kind === 'stat';
     const type = f.type || (isStat ? 'number' : 'text');
@@ -37,6 +45,7 @@ function fieldRow(kind, f = {}) {
         ? `<input type="number" class="text_pole wt-cfg-max" placeholder="max" value="${f.max ?? ''}" title="max value (blank = unbounded)">`
         : `<input type="text" class="text_pole wt-cfg-extra" placeholder="${type === 'number' ? 'unit' : ''}"${type === 'enum' ? ' style="display:none"' : ''} value="${esc(type === 'number' ? (f.unit || '') : '')}">
            <button class="menu_button wt-enum-edit"${type === 'enum' ? '' : ' style="display:none"'} title="Edit options"><i class="fa-solid fa-pen-to-square"></i> <span class="wt-enum-summary"></span></button>`}
+            ${groupSelectHtml(f)}
             <button class="menu_button wt-cfg-del" title="Remove"><i class="fa-solid fa-xmark"></i></button>
         </div>
     `);
@@ -174,14 +183,16 @@ function readRows($list, kind) {
         const $r = $(this);
         const key = String($r.find('.wt-cfg-key').val() || '').trim();
         if (!key) return;
+        const grp = normGroup($r.find('.wt-cfg-group').val());
         if (kind === 'stat') {
             const max = $r.find('.wt-cfg-max').val();
-            out.push({ key, label: key, type: 'number', max: max === '' ? undefined : Number(max), default: 0, lockedByDefault: false });
+            out.push({ key, label: key, type: 'number', max: max === '' ? undefined : Number(max), default: 0, lockedByDefault: false, group: grp ?? undefined });
             return;
         }
         const type = $r.find('.wt-cfg-type').val() || 'text';
         const extra = String($r.find('.wt-cfg-extra').val() || '').trim();
         const f = { key, label: key, type, lockedByDefault: false, default: type === 'number' ? 0 : '' };
+        if (grp != null) f.group = grp;
         if (type === 'number' && extra) f.unit = extra;
         if (type === 'enum') {
             f.options = ($r.data('enumOptions') || []).slice();

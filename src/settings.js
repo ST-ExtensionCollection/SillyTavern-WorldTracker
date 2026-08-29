@@ -45,6 +45,9 @@ function defaultSettings() {
         dockSide: 'right',          // 'left' | 'right'
         panelCollapsed: false,      // roll-up for float / dock modes
         npcCollapsed: false,        // collapse the narrator-run NPC character group
+        // Collapse state for schema field groups, keyed 'world:<n>' / 'stat:<n>'
+        // / 'char:<n>' (fields sharing a `group` digit fold into one section).
+        fieldGroupCollapsed: {},
         showLockIcons: true,
 
         // --- injection into the main chat ---

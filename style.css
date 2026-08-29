@@ -439,6 +439,48 @@ body:has(#wt-inline) #extensionTopBar {
     margin-top: 0.4rem;
 }
 
+/* ---------------- Collapsible field groups ---------------- */
+
+.wt-fieldgroup {
+    margin: 0.15rem 0;
+}
+
+.wt-fieldgroup-head {
+    background: transparent;
+    border: 1px dashed var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 6px;
+    width: 100%;
+    text-align: left;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.78rem;
+    opacity: 0.8;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.wt-fieldgroup-head:hover {
+    opacity: 1;
+}
+
+.wt-fieldgroup-title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.wt-fieldgroup-list {
+    margin-top: 0.25rem;
+    padding-left: 0.4rem;
+    border-left: 2px solid var(--wt-border);
+}
+
+.wt-fieldgroup.wt-collapsed .wt-fieldgroup-list {
+    display: none;
+}
+
 /* ---------------- Review queue + inline card ---------------- */
 
 .wt-review {
@@ -832,6 +874,11 @@ body:has(#wt-inline) #extensionTopBar {
 .wt-cfg-row .wt-cfg-extra,
 .wt-cfg-row .wt-cfg-max {
     flex: 1 1 6rem;
+}
+
+.wt-cfg-row .wt-cfg-group {
+    flex: 0 0 3.2rem;
+    padding: 0.2rem 0.2rem;
 }
 
 .wt-cfg-row .wt-cfg-del {

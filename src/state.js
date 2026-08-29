@@ -18,7 +18,7 @@
 //     _v: 1
 //   }
 
-import { defaultSchema, UPDATER_NARRATOR } from './schema.js';
+import { defaultSchema, normGroup, UPDATER_NARRATOR } from './schema.js';
 import { vlog, warn } from './log.js';
 
 export const META_KEY = 'WorldTracker';
@@ -72,6 +72,7 @@ function seedFromSchema(schema) {
             value: f.default ?? '',
             type: f.type ?? 'text',
             unit: f.unit,
+            group: normGroup(f.group),
             locked: !!f.lockedByDefault,
             lastChangedBy: null,
         };
@@ -81,6 +82,7 @@ function seedFromSchema(schema) {
             value: f.default ?? 0,
             type: f.type ?? 'number',
             max: f.max,
+            group: normGroup(f.group),
             locked: !!f.lockedByDefault,
             lastChangedBy: null,
         };
@@ -106,12 +108,16 @@ function reconcile(state, schema) {
     if (!state.snapshots || typeof state.snapshots !== 'object') state.snapshots = {};
     for (const f of s.world ?? []) {
         if (!state.world[f.key]) {
-            state.world[f.key] = { value: f.default ?? '', type: f.type ?? 'text', unit: f.unit, locked: !!f.lockedByDefault, lastChangedBy: null };
+            state.world[f.key] = { value: f.default ?? '', type: f.type ?? 'text', unit: f.unit, group: normGroup(f.group), locked: !!f.lockedByDefault, lastChangedBy: null };
+        } else {
+            state.world[f.key].group = normGroup(f.group);
         }
     }
     for (const f of s.userStats ?? []) {
         if (!state.userStats[f.key]) {
-            state.userStats[f.key] = { value: f.default ?? 0, type: f.type ?? 'number', max: f.max, locked: !!f.lockedByDefault, lastChangedBy: null };
+            state.userStats[f.key] = { value: f.default ?? 0, type: f.type ?? 'number', max: f.max, group: normGroup(f.group), locked: !!f.lockedByDefault, lastChangedBy: null };
+        } else {
+            state.userStats[f.key].group = normGroup(f.group);
         }
     }
     return state;
@@ -151,6 +157,7 @@ export function applySchema(st, schema) {
                 target[f.key] = { value: f.default ?? (f.type === 'number' ? 0 : ''), type: f.type ?? 'text', locked: !!f.lockedByDefault, lastChangedBy: null };
             }
             target[f.key].type = f.type ?? 'text';
+            target[f.key].group = normGroup(f.group);
             extra(target[f.key], f);
         }
     };
@@ -275,6 +282,7 @@ export function ensureCharacter(state, name, schema) {
                 value: f.default ?? '',
                 type: f.type ?? 'text',
                 options: f.options,
+                group: normGroup(f.group),
                 locked: !!f.lockedByDefault,
                 lastChangedBy: null,
             };

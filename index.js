@@ -110,6 +110,13 @@ function onToggleNpc(v) {
     refresh();
 }
 
+function onToggleFieldGroup(gkey, collapsed) {
+    if (!settings.fieldGroupCollapsed || typeof settings.fieldGroupCollapsed !== 'object') settings.fieldGroupCollapsed = {};
+    settings.fieldGroupCollapsed[gkey] = !!collapsed;
+    saveSettingsDebounced();
+    refresh();
+}
+
 let updateJob = null;
 
 /** ⟳ button: start an update, or stop the running one. */
@@ -502,6 +509,7 @@ jQuery(async () => {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
+        onToggleFieldGroup,
     } });
 
     buildSettingsDrawer();

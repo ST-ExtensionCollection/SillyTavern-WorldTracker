@@ -141,6 +141,12 @@ The **gear** button on the panel opens the schema editor:
 - add / remove / rename fields, pick a type (`text` / `number` / `enum`), set a
   unit (number) or max. For `enum`, the pencil button opens an editor: drag to
   reorder, rename, star one as the default, delete, or import from a comma list.
+- **Collapsible #** (the small `–` / `0`–`9` picker per field row) — fields in
+  the same section sharing a digit fold into one collapsible group in the panel
+  (placed where the group's first field sits). `–` = its own row. The default
+  character schema puts *Outfit / State of dress / Appearance / Pose* in group
+  `0` so wardrobe detail stays one line until you open it. Collapse state is
+  remembered globally per section+digit.
 - edit the clock display format and start time.
 - reset buttons per list, plus *Restore all defaults* (rebuilds the editor only,
   not other profiles).
@@ -269,6 +275,11 @@ Things worth fixing or at least being aware of:
 9. **No timezone handling** in `clock.js` — in‑world time is fictional so it
    doesn't matter, but adding elapsed time across a real DST boundary could
    shift an hour.
+10. **New default schema fields don't reach existing installs.** `loadSettings`
+    keeps a persisted `settings.schema` as‑is, so fields added to
+    `defaultSchema()` in a later version (e.g. the wardrobe group) only appear
+    in new chats / fresh installs. Add them by hand in the gear dialog, or
+    *Restore all defaults*.
 
 ---
 

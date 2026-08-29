@@ -253,6 +253,45 @@ function renderCards() {
     }
 }
 
+/**
+ * Append field rows to `$container`, folding any fields that carry a `group`
+ * digit into one collapsible block per digit (placed where the group's first
+ * member appears). `prefix` namespaces the persisted collapse key
+ * ('world' | 'stat' | 'char'). `mkRow(key, field)` returns the row element.
+ */
+function appendFieldRows($container, entries, prefix, mkRow) {
+    const { settings, handlers } = cfg;
+    const collapsedMap = settings.fieldGroupCollapsed || {};
+    const groups = new Map(); // digit -> { $list, $head, names }
+
+    for (const [key, f] of entries) {
+        const g = (f && f.group != null && f.group !== '') ? String(f.group) : null;
+        if (g == null) { $container.append(mkRow(key, f)); continue; }
+
+        let bucket = groups.get(g);
+        if (!bucket) {
+            const gkey = `${prefix}:${g}`;
+            const collapsed = !!collapsedMap[gkey];
+            const $wrap = $(`<div class="wt-fieldgroup${collapsed ? ' wt-collapsed' : ''}" data-gkey="${esc(gkey)}"></div>`);
+            const $head = $(`<button class="wt-fieldgroup-head" type="button"><i class="fa-solid ${collapsed ? 'fa-chevron-right' : 'fa-chevron-down'}"></i> <span class="wt-fieldgroup-title"></span></button>`);
+            const $list = $('<div class="wt-fieldgroup-list"></div>');
+            $head.on('click', () => handlers.onToggleFieldGroup?.(gkey, !$wrap.hasClass('wt-collapsed')));
+            $wrap.append($head, $list);
+            $container.append($wrap);
+            bucket = { $list, $head, names: [] };
+            groups.set(g, bucket);
+        }
+        bucket.names.push(key);
+        bucket.$list.append(mkRow(key, f));
+    }
+
+    for (const b of groups.values()) {
+        const joined = b.names.join(', ');
+        const label = joined.length > 30 ? `${joined.slice(0, 28)}…` : joined;
+        b.$head.find('.wt-fieldgroup-title').text(`${label} (${b.names.length})`);
+    }
+}
+
 function buildDetailBody() {
     const state = cfg.getState();
     const { settings, handlers } = cfg;
@@ -274,18 +313,16 @@ function buildDetailBody() {
     const $world = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-earth-americas"></i> World</div>');
     $world.append(fieldRow('clock', state.clock, state, { showLock, label: 'Time', onEdit, onToggleLock }));
     if (sec.world !== false) {
-        for (const [key, f] of Object.entries(state.world)) {
-            $world.append(fieldRow(`world.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
-        }
+        appendFieldRows($world, Object.entries(state.world), 'world',
+            (key, f) => fieldRow(`world.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
     }
     $body.append($world);
 
     // User stats
     if (sec.userStats && Object.keys(state.userStats).length) {
         const $us = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-user"></i> You</div>');
-        for (const [key, f] of Object.entries(state.userStats)) {
-            $us.append(fieldRow(`userStats.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
-        }
+        appendFieldRows($us, Object.entries(state.userStats), 'stat',
+            (key, f) => fieldRow(`userStats.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
         $body.append($us);
     }
 
@@ -310,9 +347,8 @@ function buildDetailBody() {
             </div></div>`);
             $c.find('.wt-updater').on('change', function () { handlers.onSetUpdater?.(name, this.value); });
             $c.find('.wt-char-remove').on('click', () => handlers.onRemoveCharacter?.(name));
-            for (const [key, f] of Object.entries(entry.fields)) {
-                $c.append(fieldRow(`characters.${name}.fields.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
-            }
+            appendFieldRows($c, Object.entries(entry.fields), 'char',
+                (key, f) => fieldRow(`characters.${name}.fields.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
             return $c;
         };
 

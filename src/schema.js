@@ -15,6 +15,18 @@ export const UPDATER_NARRATOR = 'narrator';
 export const UPDATER_SELF = 'self';
 
 /**
+ * Normalise a field's `group` value: a digit 0-9 puts the field in a
+ * collapsible group (all fields in a section sharing a number collapse
+ * together). Anything else ('-', '', undefined) = ungrouped, own row.
+ * Returns a number 0-9 or null.
+ */
+export function normGroup(v) {
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 9) return v;
+    if (typeof v === 'string' && /^[0-9]$/.test(v.trim())) return Number(v.trim());
+    return null;
+}
+
+/**
  * The default schema. `world` fields are scene-level; `userStats` track the
  * player persona; `character` is the template applied to each tracked NPC.
  */
@@ -67,10 +79,10 @@ export function defaultSchema() {
                 // Wardrobe/appearance — models routinely forget outfits between
                 // replies, so track them explicitly. Cribbed from WTracker's
                 // hair/makeup/outfit/stateOfDress/posture character block.
-                { key: 'outfit', label: 'Outfit', type: 'text', lockedByDefault: false, default: '' },
-                { key: 'stateOfDress', label: 'State of dress', type: 'text', lockedByDefault: false, default: '' },
-                { key: 'appearance', label: 'Appearance', type: 'text', lockedByDefault: false, default: '' },
-                { key: 'pose', label: 'Pose', type: 'text', lockedByDefault: false, default: '' },
+                { key: 'outfit', label: 'Outfit', type: 'text', lockedByDefault: false, default: '', group: 0 },
+                { key: 'stateOfDress', label: 'State of dress', type: 'text', lockedByDefault: false, default: '', group: 0 },
+                { key: 'appearance', label: 'Appearance', type: 'text', lockedByDefault: false, default: '', group: 0 },
+                { key: 'pose', label: 'Pose', type: 'text', lockedByDefault: false, default: '', group: 0 },
             ],
         },
     };

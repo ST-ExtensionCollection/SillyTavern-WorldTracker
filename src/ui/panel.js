@@ -171,10 +171,14 @@ function positionSheet() {
 const NARROW = 1000;
 let _resizeDebounce = null;
 
+const SCROLLER_SEL = `#${SHEET_ID}, .wt-float-body, .wt-dock-body`;
+
 /** Full rebuild from current state + settings. Safe to call often. */
 export function renderPanel() {
     if (!cfg) return;
     const { settings } = cfg;
+    // Preserve the detail-view scroll across the teardown + rebuild.
+    const prevScroll = document.querySelector(SCROLLER_SEL)?.scrollTop || 0;
     destroyPanel();
     // Nothing to track outside a chat — no panel in any mode.
     if (settings.enabled && chatActive()) {
@@ -186,6 +190,13 @@ export function renderPanel() {
         else renderBanner();
     }
     renderCards();
+
+    if (prevScroll) {
+        const restore = () => { const el = document.querySelector(SCROLLER_SEL); if (el && el.scrollTop !== prevScroll) el.scrollTop = prevScroll; };
+        restore();
+        requestAnimationFrame(restore);
+        setTimeout(restore, 300);
+    }
 
     // One resize handler for the whole panel: re-render (covers narrow-screen
     // fallback + float clamp). renderBanner also does its own lighter reflow.

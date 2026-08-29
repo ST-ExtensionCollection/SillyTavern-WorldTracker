@@ -180,7 +180,8 @@ async function onManualUpdate(opts = {}) {
     const hi = Math.min(srcId, chat.length - 1);
     const lo = Math.max(0, hi - n + 1);
     const recent = chat.slice(lo, hi + 1).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
-    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName });
+    const firstTurn = srcId === 0;
+    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn });
 
     // Snapshot the pre-query state so a later swipe/regen/delete of this
     // message can revert cleanly (milestone 7).
@@ -192,7 +193,7 @@ async function onManualUpdate(opts = {}) {
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
 
     try {
-        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}) : null;
+        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn) : null;
         const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
         if (job.superseded) { log('response ignored (superseded)'); return; }
         vlog('tracker response (first 500):', String(text || '').slice(0, 500));
@@ -286,14 +287,15 @@ function getStateAsOf(mesId) {
     const st = getState();
     if (!st) return '';
     const sec = settings.sections || {};
-    let base = state.peekSnapshot(st, mesId + 1);
-    if (!(base && (base.world || base.clock))) {
-        base = state.peekSnapshot(st, mesId);
-        if (!base) return buildSummary(st, sec);
-        const sid = swipeIdOf(mesId);
-        const recs = (st.history || []).filter((r) => r.mesId === mesId && r.swipeId === sid).sort((a, b) => a.ts - b.ts);
-        for (const r of recs) for (const ch of r.changes || []) state.applyChange(base, ch, settings.schema);
-    }
+    // Pre-query snapshot of THIS message + this swipe's own tracker changes
+    // replayed on top = the state as it stood once the turn was applied.
+    const base = state.peekSnapshot(st, mesId);
+    if (!base) return buildSummary(st, sec);
+    const sid = swipeIdOf(mesId);
+    const recs = (st.history || [])
+        .filter((r) => r.mesId === mesId && (r.swipeId == null || r.swipeId === sid))
+        .sort((a, b) => a.ts - b.ts);
+    for (const r of recs) for (const ch of r.changes || []) state.applyChange(base, ch, settings.schema);
     return buildSummary(base, sec);
 }
 

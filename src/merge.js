@@ -4,7 +4,7 @@
 // state and returns an array of proposal objects. It never mutates state and
 // never touches locked fields. applyProposal() commits one proposal.
 
-import { addElapsed, format, deltaToSeconds } from './clock.js';
+import { addElapsed, format, deltaToSeconds, toIso as isoOf, humanDelta } from './clock.js';
 import { fmtNum } from './ui/format.js';
 import { inScope } from './prompt.js';
 import * as state from './state.js';
@@ -57,27 +57,54 @@ export function diffToProposals(st, data, opts = {}) {
 
     // --- clock ---
     if (data.clock && st.clock && !st.clock.locked) {
-        let elapsed = data.clock.elapsed && typeof data.clock.elapsed === 'object'
-            ? data.clock.elapsed
-            : data.clock;
-        // Model reported 0/0/0/0 (or nothing usable) — it didn't really answer.
-        // Fall back to the user's "Expected next" interval so time still moves.
-        let usedExpected = false;
-        if (deltaToSeconds(elapsed) <= 0 && deltaToSeconds(st.clock.expectedInterval) > 0) {
-            elapsed = st.clock.expectedInterval;
-            usedExpected = true;
-        }
-        if (deltaToSeconds(elapsed) > 0) {
-            const toIso = addElapsed(st.clock.iso, elapsed);
-            if (toIso !== st.clock.iso) {
+        const fromIso = st.clock.iso;
+
+        if (sourceMessageId === 0) {
+            // First message: pick up an absolute in-world date/time if the scene
+            // states or implies one. Never auto-advance by the expected interval
+            // here — there is no "previous turn" to have elapsed from.
+            const raw = (data.clock.datetime ?? data.clock.iso)
+                ?? (typeof data.clock === 'string' ? data.clock : null);
+            let nextIso = null;
+            if (raw != null && String(raw).trim()) {
+                try { nextIso = isoOf(raw); } catch { nextIso = null; }
+            }
+            if (nextIso && nextIso !== fromIso) {
                 out.push({
                     path: 'clock', kind: 'clock', label: 'Time',
-                    from: format(st.clock.iso, st.clock.displayFormat),
-                    to: format(toIso, st.clock.displayFormat),
-                    fromIso: st.clock.iso, toIso, elapsed,
-                    expected: usedExpected,
+                    from: format(fromIso, st.clock.displayFormat),
+                    to: format(nextIso, st.clock.displayFormat),
+                    fromIso, toIso: nextIso, elapsed: null, absolute: true,
                     sourceMessageId,
                 });
+            }
+        } else {
+            let elapsed = data.clock.elapsed && typeof data.clock.elapsed === 'object'
+                ? data.clock.elapsed
+                : data.clock;
+            // Model reported 0/0/0/0 (or nothing usable) — fall back to the
+            // user's "Expected next" interval so time still moves.
+            let usedExpected = false;
+            if (deltaToSeconds(elapsed) <= 0 && deltaToSeconds(st.clock.expectedInterval) > 0) {
+                elapsed = st.clock.expectedInterval;
+                usedExpected = true;
+            }
+            if (deltaToSeconds(elapsed) > 0) {
+                const nextIso = addElapsed(fromIso, elapsed);
+                if (nextIso !== fromIso) {
+                    const fromF = format(fromIso, st.clock.displayFormat);
+                    const toF = format(nextIso, st.clock.displayFormat);
+                    out.push({
+                        path: 'clock', kind: 'clock', label: 'Time',
+                        from: fromF,
+                        // Sub-display-precision jumps (e.g. +30s with an HH:mm
+                        // format) would show "X -> X"; append the real delta.
+                        to: fromF === toF ? `${toF} (${humanDelta(fromIso, nextIso)})` : toF,
+                        fromIso, toIso: nextIso, elapsed,
+                        expected: usedExpected,
+                        sourceMessageId,
+                    });
+                }
             }
         }
     }
@@ -154,9 +181,12 @@ export function applyProposal(st, p, schema) {
         const beforeIso = st.clock.iso;
         st.clock.iso = p.toIso;
         state.save();
+        const bf = format(beforeIso, st.clock.displayFormat);
+        const af = format(p.toIso, st.clock.displayFormat);
         return {
             path: 'clock', label: 'Time', kind: 'clock',
-            before: format(beforeIso, st.clock.displayFormat), after: format(p.toIso, st.clock.displayFormat),
+            before: bf,
+            after: (bf === af && !p.absolute) ? `${af} (${humanDelta(beforeIso, p.toIso)})` : af,
             beforeIso, afterIso: p.toIso, rawBefore: beforeIso, rawAfter: p.toIso,
         };
     }

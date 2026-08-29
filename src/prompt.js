@@ -27,10 +27,12 @@ function cleanMessage(mes, cap) {
 }
 
 /** The object we want back, pre-filled with the current real values. */
-function currentAsJson(state, sec = {}) {
+function currentAsJson(state, sec = {}, firstTurn = false) {
     const o = {};
     if (state.clock && !state.clock.locked) {
-        o.clock = { elapsed: { days: 0, hours: 0, minutes: 0, seconds: 0 } };
+        o.clock = firstTurn
+            ? { datetime: format(state.clock.iso, 'yyyy-MM-dd HH:mm') }
+            : { elapsed: { days: 0, hours: 0, minutes: 0, seconds: 0 } };
     }
     if (sec.world !== false && Object.keys(state.world).length) {
         o.world = {};
@@ -54,9 +56,11 @@ function currentAsJson(state, sec = {}) {
 }
 
 /** Human notes about constraints that don't fit in the JSON. */
-function constraintNotes(state, sec = {}) {
+function constraintNotes(state, sec = {}, firstTurn = false) {
     const notes = [];
-    if (state.clock && !state.clock.locked) {
+    if (state.clock && !state.clock.locked && firstTurn) {
+        notes.push(`- clock.datetime = the scene's in-world date/time as "YYYY-MM-DD HH:mm". If the opening message states or clearly implies one (a year, a season, a weekday, "at dawn", etc.) set it; otherwise copy ${JSON.stringify(format(state.clock.iso, 'yyyy-MM-dd HH:mm'))} unchanged.`);
+    } else if (state.clock && !state.clock.locked) {
         notes.push(`- clock.elapsed = in-world time passed since ${JSON.stringify(format(state.clock.iso, state.clock.displayFormat))}. Dialogue back-and-forth is seconds. Never output an absolute date/time.`);
     } else if (state.clock?.locked) {
         notes.push('- clock: LOCKED. Omit the clock key entirely.');
@@ -83,9 +87,11 @@ function constraintNotes(state, sec = {}) {
 }
 
 /** JSON Schema describing the response shape (unlocked fields only). */
-export function buildResponseSchema(state, sec = {}) {
+export function buildResponseSchema(state, sec = {}, firstTurn = false) {
     const props = {};
-    if (state.clock && !state.clock.locked) {
+    if (state.clock && !state.clock.locked && firstTurn) {
+        props.clock = { type: 'object', properties: { datetime: { type: 'string' } } };
+    } else if (state.clock && !state.clock.locked) {
         props.clock = {
             type: 'object',
             properties: {
@@ -150,7 +156,7 @@ export function inScope(entry, name, authorName, narratorName = '', playerName =
  * @returns {{ messages: {role:string, content:string}[] }}
  */
 export function buildTrackerPrompt(state, recent, opts = {}) {
-    const { settings = {}, playerName, authorName } = opts;
+    const { settings = {}, playerName, authorName, firstTurn = false } = opts;
     const narratorName = settings.narratorName || '';
     const sys = settings.promptOverrides?.system || DEFAULT_SYSTEM;
     const cap = Number(settings.maxMessageChars) || 1500;
@@ -159,10 +165,10 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
 
     L.push('CURRENT WORLD STATE — reply with this object, updated:');
     L.push('```json');
-    L.push(JSON.stringify(currentAsJson(state, sec), null, 2));
+    L.push(JSON.stringify(currentAsJson(state, sec, firstTurn), null, 2));
     L.push('```');
 
-    const notes = constraintNotes(state, sec);
+    const notes = constraintNotes(state, sec, firstTurn);
     if (notes.length) {
         L.push('');
         L.push('Constraints:');

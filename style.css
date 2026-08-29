@@ -690,6 +690,39 @@ body:has(#wt-inline) #extensionTopBar {
     letter-spacing: normal;
 }
 
+.wt-profile-bar {
+    border-color: var(--wt-accent);
+}
+
+.wt-profile-row {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    margin-bottom: 0.4rem;
+}
+
+.wt-profile-row .wt-prof-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.wt-profile-row .menu_button {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.5rem;
+}
+
+.wt-cfg-body-host {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.wt-cfg-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
 .wt-cfg-pills {
     display: flex;
     flex-wrap: wrap;

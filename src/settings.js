@@ -56,6 +56,9 @@ function defaultSettings() {
 
         // --- schema (seeds new chats) ---
         schema: defaultSchema(),
+
+        // --- named profiles (shaped by profiles.ensureProfiles) ---
+        profiles: {},
     };
 }
 

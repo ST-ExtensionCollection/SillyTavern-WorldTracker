@@ -6,6 +6,7 @@
 
 import { defaultSchema } from '../schema.js';
 import { groupMemberNames } from './panel.js';
+import * as profiles from '../profiles.js';
 
 const TYPES = ['text', 'number', 'enum'];
 const DEFAULT_SECTIONS = { world: true, userStats: false, characters: true };
@@ -200,21 +201,15 @@ const SECTION_PILLS = [
     { key: 'characters', label: 'Characters', icon: 'fa-users' },
 ];
 
-/**
- * @param {object} ctx       SillyTavern context (callGenericPopup, POPUP_TYPE, POPUP_RESULT)
- * @param {object} settings  live settings object (schema + sections + narratorName)
- * @param {(schema, sections, extras)=>void} onSave  extras = { narratorName }
- */
-export async function openSettingsModal(ctx, settings, onSave) {
-    ctxRef = ctx;
-    const s = settings.schema;
-    const sec0 = { ...DEFAULT_SECTIONS, ...(settings.sections || {}) };
+/** Build the editable body from a { schema, sections, narratorName } snapshot. */
+function buildBody(data) {
+    const s = data.schema;
+    const sec0 = { ...DEFAULT_SECTIONS, ...(data.sections || {}) };
+    const $c = $('<div class="wt-cfg-body"></div>');
 
-    const $c = $('<div class="wt-cfg"></div>');
-
-    // --- narrator character ---
+    // narrator
     const members = groupMemberNames();
-    const curNarr = settings.narratorName || '';
+    const curNarr = data.narratorName || '';
     const narrOpts = [...new Set(members.concat(curNarr && !members.includes(curNarr) ? [curNarr] : []))];
     const $narr = $(`
         <div class="wt-cfg-sec">
@@ -223,12 +218,12 @@ export async function openSettingsModal(ctx, settings, onSave) {
                 <option value=""${curNarr ? '' : ' selected'}>(any turn)</option>
                 ${narrOpts.map((n) => `<option value="${esc(n)}"${n === curNarr ? ' selected' : ''}>${esc(n)}</option>`).join('')}
             </select>
-            <small class="notes">Characters set to updater "Narrator" update only on this character's turns. "(any turn)" = update every turn.</small>
+            <small class="notes">Characters set to updater "Narrator" update only on this character's turns. "(any turn)" = every turn.</small>
         </div>
     `);
     $c.append($narr);
 
-    // --- sections as toggle pills ---
+    // section pills
     const $pills = $('<div class="wt-cfg-pills"></div>');
     for (const p of SECTION_PILLS) {
         const on = p.key === 'userStats' ? !!sec0.userStats : sec0[p.key] !== false;
@@ -240,7 +235,7 @@ export async function openSettingsModal(ctx, settings, onSave) {
         <span class="wt-cfg-sec-actions"><button class="menu_button wt-cfg-restore-all"><i class="fa-solid fa-rotate-left"></i> Restore all defaults</button></span>
     </div></div>`).append($pills));
 
-    // --- clock ---
+    // clock
     const $clock = $(`
         <div class="wt-cfg-sec">
             <div class="wt-cfg-sec-head">Clock
@@ -248,7 +243,6 @@ export async function openSettingsModal(ctx, settings, onSave) {
             </div>
             <label>Display format <input type="text" class="text_pole wt-clk-fmt" value="${esc(s.clock?.displayFormat)}"></label>
             <label>Start date/time <input type="datetime-local" class="text_pole wt-clk-start" value="${(s.clock?.startIso || '2024-06-01T09:00:00').slice(0, 16)}"></label>
-            <small class="notes">Tokens: yyyy MMMM MMM dd d EEEE EEE HH mm ss a — text in 'quotes' is literal.</small>
         </div>
     `);
     $clock.find('.wt-clk-reset').on('click', () => {
@@ -258,45 +252,173 @@ export async function openSettingsModal(ctx, settings, onSave) {
     });
     $c.append($clock);
 
-    // --- field lists ---
+    // field lists
     const world = listSection('World fields', 'world', s.world || []);
     const stats = listSection('User stats', 'stat', s.userStats || []);
     const chars = listSection('Character fields (template for each tracked NPC)', 'char', s.character?.fields || []);
     $c.append(world.$sec, stats.$sec, chars.$sec);
 
-    $c.find('.wt-cfg-restore-all').on('click', async () => {
-        const ok = await ctx.callGenericPopup('Reset all WorldTracker fields and sections to defaults?', ctx.POPUP_TYPE.CONFIRM);
-        if (ok !== ctx.POPUP_RESULT.AFFIRMATIVE) return;
-        const ds = defaultSchema();
-        $pills.find('.wt-pill').each(function () {
-            const k = $(this).data('key');
-            $(this).toggleClass('wt-pill-on', k === 'userStats' ? !!DEFAULT_SECTIONS.userStats : DEFAULT_SECTIONS[k] !== false);
-        });
-        $clock.find('.wt-clk-fmt').val(ds.clock.displayFormat);
-        $clock.find('.wt-clk-start').val(ds.clock.startIso.slice(0, 16));
-        const refill = ($list, arr, kind) => { $list.empty(); for (const f of arr) $list.append(fieldRow(kind, f)); };
-        refill(world.$list, ds.world, 'world');
-        refill(stats.$list, ds.userStats, 'stat');
-        refill(chars.$list, ds.character?.fields || [], 'char');
+    const pillOn = (k) => $pills.find(`.wt-pill[data-key="${k}"]`).hasClass('wt-pill-on');
+
+    const read = () => ({
+        schema: {
+            ...s,
+            clock: {
+                ...s.clock,
+                displayFormat: String($clock.find('.wt-clk-fmt').val() || s.clock?.displayFormat || 'HH:mm — EEE, MMM d yyyy'),
+                startIso: `${String($clock.find('.wt-clk-start').val() || '2024-06-01T09:00').slice(0, 16)}:00`,
+            },
+            world: readRows(world.$list, 'world'),
+            userStats: readRows(stats.$list, 'stat'),
+            character: { ...(s.character || {}), fields: readRows(chars.$list, 'char') },
+        },
+        sections: { world: pillOn('world'), userStats: pillOn('userStats'), characters: pillOn('characters') },
+        narratorName: String($narr.find('.wt-narr').val() || ''),
     });
 
-    const result = await ctx.callGenericPopup($c[0], ctx.POPUP_TYPE.CONFIRM, '', {
-        okButton: 'Save', cancelButton: 'Cancel', wide: true, large: true, allowVerticalScrolling: true,
+    return { $c, read, onRestoreAll: (cb) => $c.find('.wt-cfg-restore-all').on('click', cb) };
+}
+
+async function promptName(ctx, title, def = '') {
+    try {
+        const v = await ctx.Popup.show.input(title, '', def);
+        return (v ?? '').trim();
+    } catch {
+        return (window.prompt(title, def) ?? '').trim();
+    }
+}
+
+/**
+ * @param {object} ctx       SillyTavern context
+ * @param {object} settings  live settings (schema/sections/narratorName + profiles)
+ * @param {() => void} persist  re-apply settings.schema to the current chat + refresh UI
+ */
+export async function openSettingsModal(ctx, settings, persist) {
+    ctxRef = ctx;
+    profiles.ensureProfiles(settings);
+    const saveGlobal = () => { ctx.saveSettingsDebounced(); persist(); };
+
+    let working = profiles.snapshot(settings);
+    let body = buildBody(working);
+
+    const $wrap = $('<div class="wt-cfg"></div>');
+    const $bar = $(`
+        <div class="wt-cfg-sec wt-profile-bar">
+            <div class="wt-cfg-sec-head">Profile</div>
+            <div class="wt-profile-row">
+                <select class="text_pole wt-prof-select"></select>
+                <button class="menu_button wt-prof-new" title="New profile from defaults"><i class="fa-solid fa-file-circle-plus"></i></button>
+                <button class="menu_button wt-prof-save" title="Save into this profile"><i class="fa-solid fa-floppy-disk"></i></button>
+                <button class="menu_button wt-prof-saveas" title="Save as a new profile"><i class="fa-solid fa-copy"></i></button>
+                <button class="menu_button wt-prof-rename" title="Rename"><i class="fa-solid fa-i-cursor"></i></button>
+                <button class="menu_button wt-prof-del" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            <label class="checkbox_label"><input type="checkbox" class="wt-prof-bind"><span>Use this profile for the current chat / group</span></label>
+            <label class="checkbox_label"><input type="checkbox" class="wt-prof-default"><span>Default profile (new chats)</span></label>
+        </div>
+    `);
+    const $bodyHost = $('<div class="wt-cfg-body-host"></div>').append(body.$c);
+    $wrap.append($bar, $bodyHost);
+
+    const rebuild = (data) => {
+        working = data;
+        body = buildBody(working);
+        $bodyHost.empty().append(body.$c);
+        wireRestoreAll();
+    };
+    function wireRestoreAll() {
+        body.onRestoreAll(async () => {
+            const ok = await ctx.callGenericPopup('Reset fields and sections to defaults? (does not touch other profiles)', ctx.POPUP_TYPE.CONFIRM);
+            if (ok !== ctx.POPUP_RESULT.AFFIRMATIVE) return;
+            rebuild({ schema: defaultSchema(), sections: { ...DEFAULT_SECTIONS }, narratorName: working.narratorName });
+        });
+    }
+    wireRestoreAll();
+
+    function refreshBar() {
+        profiles.ensureProfiles(settings);
+        const p = settings.profiles;
+        const $sel = $bar.find('.wt-prof-select').empty();
+        for (const { id, name } of profiles.list(settings)) {
+            $sel.append(`<option value="${esc(id)}"${id === p.activeId ? ' selected' : ''}>${esc(name)}${id === p.defaultId ? ' ★' : ''}</option>`);
+        }
+        const key = profiles.chatKey(ctx);
+        $bar.find('.wt-prof-bind').prop('checked', profiles.bindingFor(settings, key) === p.activeId).prop('disabled', !key);
+        $bar.find('.wt-prof-default').prop('checked', p.defaultId === p.activeId);
+    }
+    refreshBar();
+
+    // profile bar handlers
+    $bar.find('.wt-prof-select').on('change', function () {
+        profiles.setActive(settings, this.value);
+        const a = profiles.active(settings);
+        if (a) { profiles.applyData(settings, a.data); rebuild(profiles.snapshot(settings)); }
+        refreshBar();
+        saveGlobal();
+    });
+    $bar.find('.wt-prof-new').on('click', async () => {
+        const name = await promptName(ctx, 'Name the new profile', 'New profile');
+        if (!name) return;
+        profiles.create(settings, name, { schema: defaultSchema(), sections: { ...DEFAULT_SECTIONS }, narratorName: '' });
+        profiles.applyData(settings, profiles.active(settings).data);
+        rebuild(profiles.snapshot(settings));
+        refreshBar();
+        saveGlobal();
+    });
+    $bar.find('.wt-prof-save').on('click', () => {
+        const d = body.read();
+        profiles.save(settings, d);
+        profiles.applyData(settings, d);
+        rebuild(profiles.snapshot(settings));
+        refreshBar();
+        saveGlobal();
+        toastr.success(`WorldTracker: saved "${profiles.active(settings)?.name}".`);
+    });
+    $bar.find('.wt-prof-saveas').on('click', async () => {
+        const name = await promptName(ctx, 'Save as new profile', `${profiles.active(settings)?.name || 'Profile'} copy`);
+        if (!name) return;
+        profiles.create(settings, name, body.read());
+        profiles.applyData(settings, profiles.active(settings).data);
+        rebuild(profiles.snapshot(settings));
+        refreshBar();
+        saveGlobal();
+    });
+    $bar.find('.wt-prof-rename').on('click', async () => {
+        const p = settings.profiles;
+        const name = await promptName(ctx, 'Rename profile', p.list[p.activeId]?.name || '');
+        if (!name) return;
+        profiles.rename(settings, p.activeId, name);
+        refreshBar();
+        ctx.saveSettingsDebounced();
+    });
+    $bar.find('.wt-prof-del').on('click', async () => {
+        const p = settings.profiles;
+        if (Object.keys(p.list).length <= 1) { toastr.info('WorldTracker: keep at least one profile.'); return; }
+        const ok = await ctx.callGenericPopup(`Delete profile "${p.list[p.activeId]?.name}"?`, ctx.POPUP_TYPE.CONFIRM);
+        if (ok !== ctx.POPUP_RESULT.AFFIRMATIVE) return;
+        profiles.remove(settings, p.activeId);
+        profiles.applyData(settings, profiles.active(settings).data);
+        rebuild(profiles.snapshot(settings));
+        refreshBar();
+        saveGlobal();
+    });
+    $bar.find('.wt-prof-bind').on('change', function () {
+        profiles.bind(settings, profiles.chatKey(ctx), this.checked ? settings.profiles.activeId : '');
+        ctx.saveSettingsDebounced();
+    });
+    $bar.find('.wt-prof-default').on('change', function () {
+        profiles.setDefault(settings, this.checked ? settings.profiles.activeId : '');
+        refreshBar();
+        ctx.saveSettingsDebounced();
+    });
+
+    const result = await ctx.callGenericPopup($wrap[0], ctx.POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Save & close', cancelButton: 'Close', wide: true, large: true, allowVerticalScrolling: true,
     });
     if (result !== ctx.POPUP_RESULT.AFFIRMATIVE) return;
 
-    const newSchema = {
-        ...s,
-        clock: {
-            ...s.clock,
-            displayFormat: String($clock.find('.wt-clk-fmt').val() || s.clock?.displayFormat || 'HH:mm — EEE, MMM d yyyy'),
-            startIso: `${String($clock.find('.wt-clk-start').val() || '2024-06-01T09:00').slice(0, 16)}:00`,
-        },
-        world: readRows(world.$list, 'world'),
-        userStats: readRows(stats.$list, 'stat'),
-        character: { ...(s.character || {}), fields: readRows(chars.$list, 'char') },
-    };
-    const pillOn = (k) => $pills.find(`.wt-pill[data-key="${k}"]`).hasClass('wt-pill-on');
-    const newSections = { world: pillOn('world'), userStats: pillOn('userStats'), characters: pillOn('characters') };
-    onSave(newSchema, newSections, { narratorName: String($narr.find('.wt-narr').val() || '') });
+    const d = body.read();
+    profiles.save(settings, d);
+    profiles.applyData(settings, d);
+    saveGlobal();
 }

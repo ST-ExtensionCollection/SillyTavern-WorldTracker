@@ -10,6 +10,7 @@ import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
 import { diffToProposals, applyProposal } from './src/merge.js';
 import { updateInjection } from './src/inject.js';
+import * as profiles from './src/profiles.js';
 import { openSettingsModal } from './src/ui/settings-modal.js';
 import { initPanel, renderPanel, replaceBanner, setBusy } from './src/ui/panel.js';
 
@@ -277,19 +278,18 @@ function onDeclineAll() {
     refresh();
 }
 
+/** Re-apply the live settings.schema to the current chat and refresh the UI. */
+function applyGearSettings() {
+    const st = getState();
+    if (st) state.applySchema(st, settings.schema);
+    log('gear settings applied:', settings.schema.world.length, 'world,', settings.schema.userStats.length, 'stats,',
+        (settings.schema.character?.fields || []).length, 'char fields; sections', JSON.stringify(settings.sections),
+        'narrator', settings.narratorName || '(any)');
+    refresh();
+}
+
 function onOpenSettings() {
-    openSettingsModal(ctx, settings, (newSchema, newSections, extras = {}) => {
-        settings.schema = newSchema;
-        settings.sections = newSections;
-        if ('narratorName' in extras) settings.narratorName = extras.narratorName;
-        saveSettingsDebounced();
-        const st = getState();
-        if (st) state.applySchema(st, newSchema);
-        log('schema updated:', newSchema.world.length, 'world,', newSchema.userStats.length, 'stats,',
-            (newSchema.character?.fields || []).length, 'char fields; sections', JSON.stringify(newSections),
-            'narrator', settings.narratorName || '(any)');
-        refresh();
-    }).catch((e) => { log('settings modal error', e); });
+    openSettingsModal(ctx, settings, applyGearSettings).catch((e) => { log('settings modal error', e); });
 }
 
 // ---------------------------------------------------------------------------
@@ -495,6 +495,7 @@ function registerSlashCommands() {
 jQuery(async () => {
     settings = loadSettings(extensionSettings);
     setVerbose(!!settings.debug);
+    profiles.ensureProfiles(settings);
     state.init();
 
     initPanel({ context: ctx, settings, getState, handlers: {
@@ -511,7 +512,21 @@ jQuery(async () => {
         try { id = ctx.getCurrentChatId?.(); } catch { /* ignore */ }
         vlog(`chat changed -> ${id ?? '(none)'}`);
         stopUpdate('chat-changed'); // don't apply another chat's tracker result here
+
+        // Auto-apply a profile bound to this chat/group, else the default one.
+        try {
+            const want = profiles.resolveForChat(settings, ctx);
+            if (want && want !== settings.profiles.activeId) {
+                profiles.setActive(settings, want);
+                profiles.applyData(settings, profiles.active(settings).data);
+                saveSettingsDebounced();
+                vlog(`profile -> "${profiles.active(settings)?.name}" for this chat`);
+            }
+        } catch (e) { vlog('profile resolve failed', e); }
+
         state.get(settings.schema); // seed/reconcile for the new chat
+        const st = getState();
+        if (st) state.applySchema(st, settings.schema);
         refresh();
     });
     // Group membership changed -> the "By <name>" / narrator lists depend on it.

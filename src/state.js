@@ -122,7 +122,10 @@ function reconcile(state, schema) {
     if (!Array.isArray(state.pending)) state.pending = [];
     if (!state.snapshots || typeof state.snapshots !== 'object') state.snapshots = {};
     if (!Array.isArray(state.history)) state.history = [];
-    for (const c of Object.values(state.characters)) {
+    for (const name of Object.keys(state.characters)) {
+        const t = name.trim().toLowerCase();
+        if (!name.trim() || t === 'null' || t === 'undefined') { delete state.characters[name]; continue; }
+        const c = state.characters[name];
         if (!c.rels || typeof c.rels !== 'object') c.rels = {};
     }
     for (const f of s.world ?? []) {
@@ -201,10 +204,15 @@ export function replace(newState) {
 const SNAPSHOT_CAP = 40;
 const SNAPSHOT_KEYS = ['clock', 'world', 'userStats', 'characters'];
 
-/** Capture the pre-query state for message `index` (idempotent per index). */
+/**
+ * Capture the PRE-turn state for message `index`. Write-once: a re-run of the
+ * tracker on the same message keeps the original baseline, so re-processing
+ * recomputes deltas from the same starting point instead of compounding them.
+ */
 export function snapshot(st, index) {
     if (!st || !Number.isInteger(index) || index < 0) { warn('snapshot: bad index', index); return; }
     if (!st.snapshots) st.snapshots = {};
+    if (st.snapshots[index]) { vlog(`snapshot #${index} already exists — kept as baseline`); return; }
     const snap = {};
     for (const k of SNAPSHOT_KEYS) snap[k] = deepCopy(st[k]);
     st.snapshots[index] = snap;
@@ -349,6 +357,28 @@ export function pushHistory(state, rec) {
         trigger: rec.trigger || 'edit',
         changes: rec.changes,
     };
+
+    // Re-processing the same message+swipe (arrows / repeated auto-update)
+    // shouldn't stack N separate turn records. Merge into the previous tracker
+    // record for the same (mesId, swipeId): per path keep the earliest `before`
+    // and the latest `after`.
+    const last = state.history[state.history.length - 1];
+    if (entry.trigger === 'tracker' && last && last.trigger === 'tracker'
+        && last.mesId != null && last.mesId === entry.mesId && last.swipeId === entry.swipeId) {
+        for (const ch of entry.changes) {
+            const prev = (last.changes || []).find((c) => c.path === ch.path);
+            if (prev) {
+                prev.after = ch.after; prev.rawAfter = ch.rawAfter;
+                if ('afterIso' in ch) prev.afterIso = ch.afterIso;
+            } else {
+                last.changes.push(ch);
+            }
+        }
+        last.ts = entry.ts;
+        save();
+        return last;
+    }
+
     state.history.push(entry);
     while (state.history.length > HISTORY_CAP) state.history.shift();
     save();

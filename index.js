@@ -181,10 +181,19 @@ async function onManualUpdate(opts = {}) {
     const lo = Math.max(0, hi - n + 1);
     const recent = chat.slice(lo, hi + 1).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
     const firstTurn = srcId === 0;
+
+    // Re-processing a message (pressing the arrows again) must recompute the
+    // clock from the PRE-turn time, not from where a prior pass already left it,
+    // or repeated passes compound the advance. Other fields may churn freely.
+    const baseline = st.snapshots && st.snapshots[srcId];
+    if (baseline && baseline.clock && baseline.clock.iso) {
+        st.clock.iso = baseline.clock.iso;
+    }
+
     const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn });
 
-    // Snapshot the pre-query state so a later swipe/regen/delete of this
-    // message can revert cleanly (milestone 7).
+    // Snapshot the pre-query state (write-once) so a later swipe/regen/delete of
+    // this message can revert cleanly.
     state.snapshot(st, srcId);
 
     const job = { controller: new AbortController(), superseded: false };

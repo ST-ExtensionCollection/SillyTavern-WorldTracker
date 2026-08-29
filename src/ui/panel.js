@@ -500,7 +500,7 @@ function buildDetailBody() {
             if (targets.length) {
                 const $add = $(`<div class="wt-rel-add">
                     <select class="wt-rel-target">${targets.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select>
-                    <select class="wt-rel-value">${RELATIONSHIP_OPTIONS.map((o) => `<option>${esc(o)}</option>`).join('')}</select>
+                    <select class="wt-rel-value">${RELATIONSHIP_OPTIONS.map((o) => `<option${o === 'Neutral' ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>
                     <label class="wt-rel-mirror" title="Also set the reverse direction"><input type="checkbox"> ↔</label>
                     <button class="wt-rel-add-btn menu_button wt-btn-sm" type="button"><i class="fa-solid fa-plus"></i></button>
                 </div>`);

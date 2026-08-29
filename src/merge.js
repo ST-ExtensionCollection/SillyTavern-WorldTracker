@@ -10,6 +10,12 @@ import { inScope } from './prompt.js';
 import { RELATIONSHIP_OPTIONS } from './schema.js';
 import * as state from './state.js';
 
+/** A usable character name — not empty, not a stringified null/undefined. */
+function isRealName(n) {
+    const s = String(n ?? '').trim();
+    return !!s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined';
+}
+
 /** Loose equality for field values (trim strings, compare numbers numerically). */
 function sameValue(field, incoming) {
     const cur = field.value;
@@ -133,6 +139,7 @@ export function diffToProposals(st, data, opts = {}) {
     // --- characters ---
     if (sections.characters !== false && data.characters && typeof data.characters === 'object') {
         for (const [name, fields] of Object.entries(data.characters)) {
+            if (!isRealName(name)) continue; // guard against "null"/"undefined"/"" keys
             const entry = st.characters[name];
             if (!entry) {
                 // Only the narrator introduces new NPCs.
@@ -165,11 +172,15 @@ export function diffToProposals(st, data, opts = {}) {
                     if (!entry.rels) entry.rels = {};
                     for (const [obj, rel] of Object.entries(v)) {
                         if (!RELATIONSHIP_OPTIONS.includes(rel)) continue;
-                        if (!st.characters[obj] || obj === name) continue;
-                        if (entry.rels[obj] === rel) continue;
+                        if (!isRealName(obj) || obj === name || !st.characters[obj]) continue;
+                        const curRel = entry.rels[obj];
+                        if (curRel === rel) continue;
+                        // "Neutral" is the no-relationship default — don't propose
+                        // it for a pair that has no relationship recorded.
+                        if (rel === 'Neutral' && !curRel) continue;
                         out.push({
                             path: `characters.${name}.rels.${obj}`, kind: 'rel', label: `${name} → ${obj}`,
-                            from: entry.rels[obj] || '—', to: rel, rawTo: rel,
+                            from: curRel || '—', to: rel, rawTo: rel,
                             sourceMessageId,
                         });
                     }

@@ -307,14 +307,14 @@ export async function openSettingsModal(ctx, settings, persist) {
             <div class="wt-cfg-sec-head">Profile</div>
             <div class="wt-profile-row">
                 <select class="text_pole wt-prof-select"></select>
+                <button class="menu_button wt-prof-bind" title="Lock this profile to the current chat / group"><i class="fa-solid fa-lock-open"></i></button>
+                <button class="menu_button wt-prof-default" title="Use as the default profile for new chats"><i class="fa-regular fa-star"></i></button>
                 <button class="menu_button wt-prof-new" title="New profile from defaults"><i class="fa-solid fa-file-circle-plus"></i></button>
                 <button class="menu_button wt-prof-save" title="Save into this profile"><i class="fa-solid fa-floppy-disk"></i></button>
                 <button class="menu_button wt-prof-saveas" title="Save as a new profile"><i class="fa-solid fa-copy"></i></button>
                 <button class="menu_button wt-prof-rename" title="Rename"><i class="fa-solid fa-i-cursor"></i></button>
                 <button class="menu_button wt-prof-del" title="Delete"><i class="fa-solid fa-trash"></i></button>
             </div>
-            <label class="checkbox_label"><input type="checkbox" class="wt-prof-bind"><span>Use this profile for the current chat / group</span></label>
-            <label class="checkbox_label"><input type="checkbox" class="wt-prof-default"><span>Default profile (new chats)</span></label>
         </div>
     `);
     const $bodyHost = $('<div class="wt-cfg-body-host"></div>').append(body.$c);
@@ -343,8 +343,15 @@ export async function openSettingsModal(ctx, settings, persist) {
             $sel.append(`<option value="${esc(id)}"${id === p.activeId ? ' selected' : ''}>${esc(name)}${id === p.defaultId ? ' ★' : ''}</option>`);
         }
         const key = profiles.chatKey(ctx);
-        $bar.find('.wt-prof-bind').prop('checked', profiles.bindingFor(settings, key) === p.activeId).prop('disabled', !key);
-        $bar.find('.wt-prof-default').prop('checked', p.defaultId === p.activeId);
+        const bound = !!key && profiles.bindingFor(settings, key) === p.activeId;
+        const $bind = $bar.find('.wt-prof-bind');
+        $bind.toggleClass('wt-on', bound).prop('disabled', !key)
+            .attr('title', !key ? 'No chat/group to lock to' : bound ? 'Locked to this chat/group — click to unlock' : 'Lock this profile to the current chat/group');
+        $bind.find('i').attr('class', `fa-solid ${bound ? 'fa-lock' : 'fa-lock-open'}`);
+        const isDef = p.defaultId === p.activeId;
+        const $def = $bar.find('.wt-prof-default').toggleClass('wt-on', isDef)
+            .attr('title', isDef ? 'This is the default profile — click to clear' : 'Use as the default profile for new chats');
+        $def.find('i').attr('class', `${isDef ? 'fa-solid' : 'fa-regular'} fa-star`);
     }
     refreshBar();
 
@@ -402,12 +409,17 @@ export async function openSettingsModal(ctx, settings, persist) {
         refreshBar();
         saveGlobal();
     });
-    $bar.find('.wt-prof-bind').on('change', function () {
-        profiles.bind(settings, profiles.chatKey(ctx), this.checked ? settings.profiles.activeId : '');
+    $bar.find('.wt-prof-bind').on('click', function () {
+        if (this.disabled) return;
+        const key = profiles.chatKey(ctx);
+        const nowBound = $(this).hasClass('wt-on');
+        profiles.bind(settings, key, nowBound ? '' : settings.profiles.activeId);
+        refreshBar();
         ctx.saveSettingsDebounced();
     });
-    $bar.find('.wt-prof-default').on('change', function () {
-        profiles.setDefault(settings, this.checked ? settings.profiles.activeId : '');
+    $bar.find('.wt-prof-default').on('click', function () {
+        const isDef = $(this).hasClass('wt-on');
+        profiles.setDefault(settings, isDef ? '' : settings.profiles.activeId);
         refreshBar();
         ctx.saveSettingsDebounced();
     });

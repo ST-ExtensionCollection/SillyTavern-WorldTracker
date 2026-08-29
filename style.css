@@ -711,6 +711,13 @@ body:has(#wt-inline) #extensionTopBar {
     padding: 0.25rem 0.5rem;
 }
 
+.wt-profile-row .wt-prof-bind.wt-on,
+.wt-profile-row .wt-prof-default.wt-on {
+    color: var(--wt-accent);
+    border-color: var(--wt-accent);
+    background: color-mix(in srgb, var(--wt-accent) 20%, transparent);
+}
+
 .wt-cfg-body-host {
     display: flex;
     flex-direction: column;

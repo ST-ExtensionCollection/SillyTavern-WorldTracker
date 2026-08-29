@@ -84,16 +84,22 @@ function unpadChat() {
 export function groupMemberNames() {
     try {
         const c = globalThis.SillyTavern.getContext();
-        const gid = c.groupId;
-        if (!gid) return [];
+        const gid = c.groupId ?? c.selected_group;
+        if (!gid) { vlog('groupMemberNames: no groupId (solo chat)'); return []; }
         const group = (c.groups || []).find((g) => String(g.id) === String(gid));
-        if (!group) return [];
+        if (!group) { vlog(`groupMemberNames: group ${gid} not in ctx.groups (${(c.groups || []).length} groups)`); return []; }
         const chars = c.characters || [];
-        return (group.members || [])
-            .map((avatar) => chars.find((ch) => ch.avatar === avatar)?.name
-                || String(avatar).replace(/\.(png|webp|jpe?g|gif)$/i, ''))
+        const raw = Array.isArray(group.members) ? group.members : [];
+        const out = raw
+            .map((m) => {
+                const ch = chars.find((x) => x.avatar === m || x.name === m);
+                return ch?.name || String(m).replace(/\.(png|webp|jpe?g|gif)$/i, '');
+            })
             .filter(Boolean);
-    } catch {
+        vlog(`groupMemberNames: members=[${raw.join(', ')}] -> [${out.join(', ')}]`);
+        return [...new Set(out)];
+    } catch (e) {
+        vlog('groupMemberNames error', e);
         return [];
     }
 }

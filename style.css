@@ -588,6 +588,31 @@ body:has(#wt-inline) #extensionTopBar {
     padding: 0.5rem 0.6rem;
 }
 
+.wt-float.wt-dragging,
+.wt-float.wt-sizing {
+    opacity: 0.92;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+    user-select: none;
+}
+
+.wt-resize-grip {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    background:
+        linear-gradient(135deg, transparent 0 50%, var(--wt-border) 50% 60%, transparent 60% 70%, var(--wt-border) 70% 82%, transparent 82%);
+    touch-action: none;
+}
+
+.wt-toolbar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
 /* ---------------- Dock ---------------- */
 
 .wt-dock {

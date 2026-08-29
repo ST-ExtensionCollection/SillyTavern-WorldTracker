@@ -6,6 +6,7 @@
 
 import { fieldRow } from './fields.js';
 import { displayValue, esc, iconFor } from './format.js';
+import { makeDraggable, makeResizable } from './drag.js';
 import { log } from '../log.js';
 
 const ROOT_ID = 'wt-root';
@@ -130,18 +131,31 @@ function positionSheet() {
     sheet.style.width = `${Math.round(r.width)}px`;
 }
 
+const NARROW = 1000;
+let _resizeDebounce = null;
+
 /** Full rebuild from current state + settings. Safe to call often. */
 export function renderPanel() {
     if (!cfg) return;
     const { settings } = cfg;
     destroyPanel();
     if (settings.enabled) {
-        const mode = settings.uiMode || 'banner';
-        if (mode === 'banner') renderBanner();
-        else if (mode === 'dock') renderDock();
-        else renderFloat();
+        let mode = settings.uiMode || 'banner';
+        // Free-floating / side-rail panels are unusable on a narrow screen.
+        if ((mode === 'float' || mode === 'dock') && window.innerWidth <= NARROW) mode = 'banner';
+        if (mode === 'dock') renderDock();
+        else if (mode === 'float') renderFloat();
+        else renderBanner();
     }
     renderCards();
+
+    // One resize handler for the whole panel: re-render (covers narrow-screen
+    // fallback + float clamp). renderBanner also does its own lighter reflow.
+    resizeHandler = () => {
+        clearTimeout(_resizeDebounce);
+        _resizeDebounce = setTimeout(() => renderPanel(), 150);
+    };
+    window.addEventListener('resize', resizeHandler);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,15 +367,10 @@ function renderBanner() {
 
     // Re-add / size the chat spacer synchronously so there's no frame where it
     // vanished (destroyPanel removed it) — that gap would jump the scroll.
-    padChatForBar();
-
-    // Re-measure on resize only. NOT on scroll: the bar is inside a fixed
-    // TopInfoBar so its rect never moves with scroll, and re-padding #chat on
-    // every scroll frame fought the chat's own scrolling (bounce-back).
+    // Re-measure after TopInfoBar's height transition settles. (Window-resize is
+    // handled by renderPanel's single handler, which re-runs this whole path.)
     const reflow = () => { padChatForBar(); positionSheet(); };
-    resizeHandler = reflow;
-    window.addEventListener('resize', resizeHandler);
-    // Measure now, then again after TopInfoBar's height transition settles.
+    padChatForBar();
     requestAnimationFrame(reflow);
     setTimeout(reflow, 250);
     setTimeout(reflow, 900);
@@ -383,25 +392,40 @@ function chip(path, label, value, locked) {
 }
 
 // ---------------------------------------------------------------------------
-// Float / Dock — minimal for now (full drag/resize in a later milestone)
+// Float / Dock  (narrow-screen fallback is handled in renderPanel)
 // ---------------------------------------------------------------------------
 
 function renderFloat() {
-    const { settings } = cfg;
+    const { settings, handlers } = cfg;
     const p = settings.floatPos || { x: 80, y: 80 };
     const s = settings.floatSize || { w: 340, h: 420 };
-    const $root = $(`<div id="${ROOT_ID}" class="wt-float" style="left:${p.x}px;top:${p.y}px;width:${s.w}px;height:${s.h}px"></div>`);
-    $root.append($('<div class="wt-float-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>').append(buildToolbar()));
+    const x = Math.max(0, Math.min(p.x, window.innerWidth - 120));
+    const y = Math.max(0, Math.min(p.y, window.innerHeight - 60));
+    const $root = $(`<div id="${ROOT_ID}" class="wt-float" style="left:${x}px;top:${y}px;width:${s.w}px;height:${s.h}px"></div>`);
+    const $head = $('<div class="wt-float-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>').append(buildToolbar());
+    $root.append($head);
     $root.append($('<div class="wt-float-body"></div>').append(buildDetailBody()));
     $('body').append($root);
-    // drag/resize wired in milestone 8
+
+    makeDraggable($root[0], $head[0], 'wtFloat', ({ x: nx, y: ny }) => {
+        settings.floatPos = { x: nx, y: ny };
+        handlers.onPersistLayout?.();
+    }, '.wt-toolbar');
+    makeResizable($root[0], 'wtFloat', ({ w, h }) => {
+        settings.floatSize = { w, h };
+        handlers.onPersistLayout?.();
+    });
 }
 
 function renderDock() {
     const { settings } = cfg;
     const side = settings.dockSide === 'left' ? 'left' : 'right';
     const $root = $(`<div id="${ROOT_ID}" class="wt-dock wt-dock-${side}"></div>`);
-    $root.append($('<div class="wt-dock-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>').append(buildToolbar()));
+    const $head = $(`<div class="wt-dock-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>`);
+    const $flip = $(`<button class="wt-btn wt-dock-flip" title="Dock to the other side"><i class="fa-solid fa-left-right"></i></button>`);
+    $flip.on('click', () => cfg.handlers.onDockSide?.(side === 'left' ? 'right' : 'left'));
+    $head.append($('<div class="wt-toolbar-wrap"></div>').append($flip).append(buildToolbar()));
+    $root.append($head);
     $root.append($('<div class="wt-dock-body"></div>').append(buildDetailBody()));
     $('body').append($root).addClass(`wt-has-dock wt-dock-${side}`);
 }

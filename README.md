@@ -107,11 +107,12 @@ sheet):
   character is set (gear dialog → *Narrator character*, default *"any turn"*),
   this means every turn.
 - **Self only (\<name\>)** — updated only on a turn that character authored.
-- **By \<name\>** — updated only on that named author's turns. The list is
-  populated from the current group's members plus your other tracked
-  characters; pick **By a custom name…** to match any author name (useful when
-  the "characters" are voiced by a single narrator card rather than being real
-  group members).
+- **By \<name\>** — updated only on that named author's turns. The list is the
+  current group's members plus your other tracked characters.
+
+If your group is voiced by a single narrator card, leave characters on
+**Narrator** and set the *Narrator character* — per‑cast‑member ownership isn't
+possible because every message is authored by the one narrator.
 
 Out‑of‑scope characters are told *"do not report this turn"* and any proposals
 for them are dropped.

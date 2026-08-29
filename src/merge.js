@@ -51,7 +51,7 @@ function fieldProposal(path, label, field, incoming, sourceMessageId) {
  * @returns {Array} proposals
  */
 export function diffToProposals(st, data, opts = {}) {
-    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '' } = opts;
+    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '' } = opts;
     const out = [];
     if (!data || typeof data !== 'object') return out;
 
@@ -118,8 +118,20 @@ export function diffToProposals(st, data, opts = {}) {
                 continue;
             }
             // Ownership: skip characters that aren't this turn's to update.
-            if (!inScope(entry, name, authorName, narratorName)) continue;
+            if (!inScope(entry, name, authorName, narratorName, playerName)) continue;
             for (const [fk, v] of Object.entries(fields || {})) {
+                if (fk === 'present') {
+                    if (v == null) continue;
+                    const cur = entry.present !== false;
+                    const nv = !!v;
+                    if (nv === cur) continue;
+                    out.push({
+                        path: `characters.${name}.present`, kind: 'presence', label: `${name} · presence`,
+                        from: cur ? 'present' : 'away', to: nv ? 'present' : 'away', rawTo: nv,
+                        sourceMessageId,
+                    });
+                    continue;
+                }
                 const f = entry.fields[fk];
                 if (!f || f.locked || v == null || sameValue(f, v)) continue;
                 out.push(fieldProposal(`characters.${name}.fields.${fk}`, `${name} · ${fk}`, f, v, sourceMessageId));
@@ -138,9 +150,20 @@ export function applyProposal(st, p, schema) {
         state.save();
         return;
     }
+    if (p.kind === 'presence') {
+        const name = p.path.split('.')[1];
+        const entry = st.characters[name];
+        if (entry) {
+            entry.present = !!p.rawTo;
+            if (!entry.present) entry.lastPresentTs = Date.now();
+        }
+        state.save();
+        return;
+    }
     if (p.kind === 'new-character') {
         const entry = state.ensureCharacter(st, p.rawTo.name, schema);
         for (const [fk, v] of Object.entries(p.rawTo.fields || {})) {
+            if (fk === 'present') { entry.present = v !== false; continue; }
             const f = entry.fields[fk];
             if (f && !f.locked && v != null) f.value = coerce(f, v);
         }

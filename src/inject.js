@@ -31,7 +31,8 @@ export function buildSummary(st, sec = {}) {
             const bits = Object.entries(c.fields)
                 .filter(([, f]) => f.value !== '' && f.value != null)
                 .map(([fk, f]) => `${fk}: ${f.value}`);
-            if (bits.length) lines.push(`${name} — ${bits.join('; ')}`);
+            const tag = c.present === false ? ' (not present)' : '';
+            if (bits.length) lines.push(`${name}${tag} — ${bits.join('; ')}`);
         }
     }
     return lines.length > 1 ? lines.join('\n') : '';

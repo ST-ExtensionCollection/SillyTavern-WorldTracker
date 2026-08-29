@@ -399,7 +399,8 @@ body:has(#wt-inline) #extensionTopBar {
     font-size: 0.75rem;
 }
 
-.wt-char-remove {
+.wt-char-remove,
+.wt-char-present {
     background: transparent;
     border: none;
     color: var(--wt-fg);
@@ -407,7 +408,42 @@ body:has(#wt-inline) #extensionTopBar {
     cursor: pointer;
 }
 
-.wt-char-remove:hover {
+.wt-char-remove:hover,
+.wt-char-present:hover {
+    opacity: 1;
+}
+
+.wt-char-present {
+    flex: 0 0 auto;
+    padding: 0 0.1rem;
+}
+
+/* Absent characters: faded, fields folded away, sorted to the bottom by JS. */
+.wt-char.wt-absent {
+    opacity: 0.5;
+}
+
+.wt-char.wt-absent .wt-char-fields {
+    display: none;
+}
+
+.wt-char.wt-absent .wt-char-present {
+    opacity: 0.85;
+}
+
+/* "Track every participant" button in the Characters section header. */
+.wt-add-participants {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    cursor: pointer;
+    opacity: 0.75;
+}
+
+.wt-add-participants:hover {
     opacity: 1;
 }
 

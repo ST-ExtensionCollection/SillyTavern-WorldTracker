@@ -12,7 +12,7 @@ import { diffToProposals, applyProposal } from './src/merge.js';
 import { updateInjection } from './src/inject.js';
 import * as profiles from './src/profiles.js';
 import { openSettingsModal } from './src/ui/settings-modal.js';
-import { initPanel, renderPanel, replaceBanner, setBusy } from './src/ui/panel.js';
+import { initPanel, renderPanel, replaceBanner, setBusy, groupMemberNames } from './src/ui/panel.js';
 
 const ctx = SillyTavern.getContext();
 const {
@@ -178,7 +178,8 @@ async function onManualUpdate(opts = {}) {
         }
         log('parsed tracker data:', res.data);
         ingestProposals(st, diffToProposals(st, res.data, {
-            sourceMessageId: srcId, authorName, sections: settings.sections || {}, narratorName: settings.narratorName || '',
+            sourceMessageId: srcId, authorName, sections: settings.sections || {},
+            narratorName: settings.narratorName || '', playerName: c.name1 || '',
         }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
@@ -201,6 +202,38 @@ function onRemoveCharacter(name) {
     const st = getState();
     if (!st) return;
     state.removeCharacter(st, name);
+    refresh();
+}
+
+function onSetPresent(name, present) {
+    const st = getState();
+    if (!st) return;
+    state.setPresent(st, name, present);
+    vlog(`presence ${name} -> ${present ? 'present' : 'away'}`);
+    refresh();
+}
+
+/**
+ * Track every chat participant in one go. Group members (or the solo chat's
+ * character) minus the narrator — but only when a narrator IS set; "(any turn)"
+ * (empty narratorName) means track everyone.
+ */
+function onAddParticipants() {
+    const st = getState();
+    if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
+    const c = SillyTavern.getContext();
+    const members = groupMemberNames();
+    const pool = members.length ? members : [c.name2].filter(Boolean);
+    const narrator = settings.narratorName || '';
+    let added = 0;
+    for (const name of pool) {
+        if (!name || name === narrator || st.characters[name]) continue;
+        state.ensureCharacter(st, name, settings.schema);
+        added++;
+    }
+    log(`add participants: +${added} (pool ${pool.length}${narrator ? `, narrator "${narrator}" skipped` : ''})`);
+    if (added) toastr.success(`WorldTracker: now tracking ${added} more character(s).`);
+    else toastr.info('WorldTracker: no new participants to add.');
     refresh();
 }
 
@@ -466,17 +499,19 @@ function registerSlashCommands() {
 
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: 'wt-char',
-        helpString: 'WorldTracker: add or remove a tracked character. /wt-char add|remove (name)',
+        helpString: 'WorldTracker: manage tracked characters. /wt-char add|remove (name) — or /wt-char sync to track every chat participant.',
         unnamedArgumentList: [
-            SlashCommandArgument.fromProps({ description: 'add|remove', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
-            SlashCommandArgument.fromProps({ description: 'character name', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
+            SlashCommandArgument.fromProps({ description: 'add|remove|sync', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
+            SlashCommandArgument.fromProps({ description: 'character name (not needed for sync)', typeList: [ARGUMENT_TYPE.STRING], isRequired: false }),
         ],
         callback: (_args, value) => {
             const parts = String(value).trim().split(/\s+/);
             const op = parts.shift();
             const name = parts.join(' ');
             const st = getState();
-            if (!st || !name) return '';
+            if (!st) return '';
+            if (op === 'sync' || op === 'all') { onAddParticipants(); return ''; }
+            if (!name) return '';
             if (op === 'add') state.ensureCharacter(st, name, settings.schema);
             else if (op === 'remove') state.removeCharacter(st, name);
             vlog(`/wt-char ${op} ${name} -> now tracking ${Object.keys(st.characters).length}`);
@@ -509,7 +544,7 @@ jQuery(async () => {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
-        onToggleFieldGroup,
+        onToggleFieldGroup, onSetPresent, onAddParticipants,
     } });
 
     buildSettingsDrawer();

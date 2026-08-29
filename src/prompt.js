@@ -43,7 +43,7 @@ function currentAsJson(state, sec = {}) {
     if (names.length) {
         o.characters = {};
         for (const name of names) {
-            o.characters[name] = {};
+            o.characters[name] = { present: state.characters[name].present !== false };
             for (const [fk, ff] of Object.entries(state.characters[name].fields)) {
                 o.characters[name][fk] = ff.value;
             }
@@ -69,6 +69,9 @@ function constraintNotes(state, sec = {}) {
         else if (f.max != null) notes.push(`- userStats.${k}: integer 0–${f.max}.`);
     }
     if (sec.characters === false) return notes;
+    if (Object.keys(state.characters).length) {
+        notes.push('- characters.<name>.present: boolean — true only when the character is physically in the current scene this turn; false when away. Change it only when the scene shows them arrive or leave.');
+    }
     for (const [name, c] of Object.entries(state.characters)) {
         for (const [fk, ff] of Object.entries(c.fields)) {
             if (ff.locked) notes.push(`- characters.${name}.${fk}: LOCKED — must stay ${JSON.stringify(ff.value)}.`);
@@ -111,8 +114,9 @@ export function buildResponseSchema(state, sec = {}) {
             const fp = objOf(Object.entries(state.characters[name].fields), (ff) => (
                 ff.type === 'enum' && Array.isArray(ff.options) ? { type: 'string', enum: ff.options }
                     : ff.type === 'number' ? { type: 'number' } : { type: 'string' }
-            ));
-            if (fp) cp[name] = fp;
+            )) || { type: 'object', properties: {} };
+            fp.properties.present = { type: 'boolean' };
+            cp[name] = fp;
         }
         if (Object.keys(cp).length) props.characters = { type: 'object', properties: cp };
     }
@@ -126,8 +130,11 @@ export function buildResponseSchema(state, sec = {}) {
  *   '<name>'    -> a turn that named character authored
  * @param {string} authorName   who authored the triggering message
  * @param {string} narratorName the designated narrator ('' = any turn)
+ * @param {string} playerName   the persona name — a character sharing it is
+ *                              always writable (the player's own appearance)
  */
-export function inScope(entry, name, authorName, narratorName = '') {
+export function inScope(entry, name, authorName, narratorName = '', playerName = '') {
+    if (playerName && name === playerName) return true;
     const u = entry?.updater || 'narrator';
     if (u === 'narrator') return narratorName ? authorName === narratorName : true;
     if (!authorName) return false;
@@ -163,12 +170,16 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
 
     const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
-        const writable = names.filter((n) => inScope(state.characters[n], n, authorName, narratorName));
+        const writable = names.filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
         const readonly = names.filter((n) => !writable.includes(n));
         L.push('');
         if (writable.length) L.push(`Report updates for these NPCs only: ${writable.join(', ')}.`);
         if (readonly.length) L.push(`Do NOT report or change these NPCs this turn (not their turn to update): ${readonly.join(', ')}.`);
-        if (playerName) L.push(`Never report the player (${playerName}).`);
+        if (playerName && names.includes(playerName)) {
+            L.push(`${playerName} is both the player and a tracked character — report ${playerName}'s fields from their own messages and the narration.`);
+        } else if (playerName) {
+            L.push(`Never report the player (${playerName}).`);
+        }
     }
 
     if (settings.promptOverrides?.instruction) {

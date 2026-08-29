@@ -276,7 +276,7 @@ export function labelFor(path) {
 export function ensureCharacter(state, name, schema) {
     const s = schema ?? defaultSchema();
     if (!state.characters[name]) {
-        const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, fields: {} };
+        const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, fields: {} };
         for (const f of s.character?.fields ?? []) {
             entry.fields[f.key] = {
                 value: f.default ?? '',
@@ -298,6 +298,20 @@ export function removeCharacter(state, name) {
         delete state.characters[name];
         save();
     }
+}
+
+/**
+ * Set a character's scene presence. Turning it off stamps `lastPresentTs` so the
+ * panel can sort recently-departed characters above long-absent ones. Presence
+ * is a first-class per-character property, not a schema field — a missing
+ * `present` counts as present everywhere.
+ */
+export function setPresent(state, name, present) {
+    const entry = state.characters[name];
+    if (!entry) return;
+    entry.present = !!present;
+    if (!entry.present) entry.lastPresentTs = Date.now();
+    save();
 }
 
 // ---------------------------------------------------------------------------

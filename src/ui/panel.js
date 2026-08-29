@@ -104,6 +104,15 @@ export function groupMemberNames() {
     }
 }
 
+/** The persona (player) name, live from context. '' if unavailable. */
+export function playerName() {
+    try {
+        return globalThis.SillyTavern.getContext().name1 || '';
+    } catch {
+        return '';
+    }
+}
+
 /** True when a character/group chat is open. Nothing to track otherwise. */
 function chatActive() {
     try {
@@ -326,17 +335,34 @@ function buildDetailBody() {
         $body.append($us);
     }
 
-    // Characters — main (self / by-name) up top, narrator-run NPCs in a
-    // collapsible group below.
-    const names = sec.characters !== false ? Object.keys(state.characters) : [];
-    if (names.length) {
-        const $cs = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
+    // Characters — main (self / by-name / the player's own card) up top,
+    // narrator-run NPCs in a collapsible group below. Absent characters fade,
+    // fold their fields, and sink to the bottom of their list (most recently
+    // present first).
+    if (sec.characters !== false) {
+        const names = Object.keys(state.characters);
+        const pName = playerName();
+        const $cs = $('<div class="wt-section"></div>');
+        const $head = $('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
+        const $addAll = $('<button class="wt-add-participants" title="Track every chat participant"><i class="fa-solid fa-user-plus"></i></button>');
+        $addAll.on('click', () => handlers.onAddParticipants?.());
+        $head.append($addAll);
+        $cs.append($head);
+
         const members = groupMemberNames();
+        const isPresent = (n) => state.characters[n].present !== false;
+        const sortByPresence = (arr) => [
+            ...arr.filter(isPresent),
+            ...arr.filter((n) => !isPresent(n))
+                .sort((a, b) => (state.characters[b].lastPresentTs || 0) - (state.characters[a].lastPresentTs || 0)),
+        ];
         const buildCard = (name) => {
             const entry = state.characters[name];
+            const absent = entry.present === false;
             const byNames = [...new Set([...members, ...names])].filter((n) => n !== name);
             if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) byNames.push(entry.updater);
-            const $c = $(`<div class="wt-char"><div class="wt-char-head">
+            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}"><div class="wt-char-head">
+                <button class="wt-char-present" title="${absent ? 'Away — click to mark present' : 'Present — click to mark away'}"><i class="fa-solid ${absent ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
                 <span class="wt-char-name">${esc(name)}</span>
                 <select class="wt-updater" title="Who updates this character">
                     <option value="narrator"${entry.updater === 'narrator' ? ' selected' : ''}>Narrator</option>
@@ -345,15 +371,19 @@ function buildDetailBody() {
                 </select>
                 <button class="wt-char-remove" title="Stop tracking ${esc(name)}"><i class="fa-solid fa-trash"></i></button>
             </div></div>`);
+            $c.find('.wt-char-present').on('click', () => handlers.onSetPresent?.(name, absent));
             $c.find('.wt-updater').on('change', function () { handlers.onSetUpdater?.(name, this.value); });
             $c.find('.wt-char-remove').on('click', () => handlers.onRemoveCharacter?.(name));
-            appendFieldRows($c, Object.entries(entry.fields), 'char',
+            const $fields = $('<div class="wt-char-fields"></div>');
+            appendFieldRows($fields, Object.entries(entry.fields), 'char',
                 (key, f) => fieldRow(`characters.${name}.fields.${key}`, f, state, { showLock, label: key, onEdit, onToggleLock }));
+            $c.append($fields);
             return $c;
         };
 
-        const mainNames = names.filter((n) => state.characters[n].updater !== 'narrator');
-        const npcNames = names.filter((n) => state.characters[n].updater === 'narrator');
+        const isMain = (n) => n === pName || state.characters[n].updater !== 'narrator';
+        const mainNames = sortByPresence(names.filter(isMain));
+        const npcNames = sortByPresence(names.filter((n) => !isMain(n)));
         for (const name of mainNames) $cs.append(buildCard(name));
 
         if (npcNames.length) {

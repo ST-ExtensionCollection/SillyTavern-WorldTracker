@@ -128,11 +128,17 @@ for them are dropped.
 
 ### Your own character
 
-A tracked character whose name matches your **persona name** is never bucketed
-as an NPC (it stays in the main list even on *Narrator*), and it stays writable
-on **every** turn regardless of its updater — so the model can remember and
-update *your* outfit / appearance from your own messages and the narration. The
-usual *"never report the player"* instruction is dropped for that name.
+The character whose name matches your **persona name** is tracked automatically
+(toggle **Track my character** in the extension settings to stop that) and gets
+its **own** field template — by default *Status* (conditions / injuries) plus
+the *Outfit / State of dress / Appearance / Pose* group, edited under **Your
+character** in the gear dialog. No *Relationship*, no *Location*.
+
+Its card is pinned to the top of the list, tagged *you*, and has no updater
+dropdown or presence toggle — the player is always writable (on **every** turn,
+so the model updates *your* appearance from your own messages and the
+narration) and always present. The usual *"never report the player"* prompt
+line is dropped; the tracker is told to report your fields instead.
 
 ### Bulk‑add participants
 
@@ -165,6 +171,8 @@ The **gear** button on the panel opens the schema editor:
 - section pills — toggle **World fields**, **User stats**, **Characters** on/off.
   **User stats are off by default** (like RPG Companion); flip the pill to get
   Health/Energy back.
+- **Character fields** is the template for each tracked NPC; **Your character**
+  is a separate template for the persona's own card (see *Your own character*).
 - add / remove / rename fields, pick a type (`text` / `number` / `enum`), set a
   unit (number) or max. For `enum`, the pencil button opens an editor: drag to
   reorder, rename, star one as the default, delete, or import from a comma list.
@@ -215,6 +223,7 @@ onward — so a re‑roll doesn't compound tracker changes.
 | Auto‑update | off / after AI / after mine / after every message |
 | Messages of context | how many recent messages the query sees |
 | Feed tracked state to the model + Injection depth | the `[World State]` block |
+| Track my character | auto‑add a card for your persona, seeded from the *Your character* template |
 | Answer / Extra think token budget | request `max_tokens` = answer + think, so a reasoning model isn't cut off before it writes the JSON |
 | Reasoning effort | sent as `reasoning_effort`; *low* is usually plenty |
 | Auto‑approve all changes | skip the review queue |
@@ -241,7 +250,7 @@ index.js            bootstrap: settings, panel, events, slash commands,
                     auto-update timing, swipe/revert handling
 src/
   settings.js       global config + schema, extension_settings.WorldTracker
-  schema.js         default field definitions
+  schema.js         default field definitions (world / userStats / character / player)
   state.js          canonical per-chat state in chat_metadata; path helpers,
                     pending queue, pre-query snapshots, applySchema()
   clock.js          dependency-free parse / format / addElapsed
@@ -309,6 +318,9 @@ Things worth fixing or at least being aware of:
     `defaultSchema()` in a later version (e.g. the wardrobe group) only appear
     in new chats / fresh installs. Add them by hand in the gear dialog, or
     *Restore all defaults*.
+11. **Renaming your persona mid‑chat orphans the player card.** The old‑name
+    card becomes a normal tracked character on the next reconcile and a fresh
+    one is auto‑created for the new name. Remove the stale one by hand.
 
 ---
 

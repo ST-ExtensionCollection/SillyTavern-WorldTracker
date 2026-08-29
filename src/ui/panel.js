@@ -387,10 +387,13 @@ function buildDetailBody() {
     const onEdit = (path, val, o) => handlers.onEdit?.(path, val, o);
     const onToggleLock = (path, locked) => handlers.onToggleLock?.(path, locked);
     const histFor = (path) => { try { return handlers.fieldHistory?.(path) || []; } catch { return []; } };
+    const autoSet = new Set(settings.autoApproveFields || []);
     const rowOpts = (path, label) => ({
         showLock, label, onEdit, onToggleLock,
         history: histFor(path),
         onPickHistory: (v) => handlers.onEdit?.(path, path === 'clock' ? { __setIso: v } : v, { trigger: 'scrub' }),
+        autoApproved: autoSet.has(path),
+        onToggleAutoApprove: (p, next) => handlers.onToggleAutoApprove?.(p, next),
     });
 
     // World section (clock always; world fields gated by the section toggle)
@@ -421,7 +424,15 @@ function buildDetailBody() {
         const $head = $('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
         const $addAll = $('<button class="wt-add-participants" title="Track every chat participant"><i class="fa-solid fa-user-plus"></i></button>');
         $addAll.on('click', () => handlers.onAddParticipants?.());
-        $head.append($addAll);
+        const $addForm = $('<span class="wt-char-add"><input class="wt-char-add-inp text_pole" placeholder="add by name…"><button class="wt-char-add-btn menu_button" title="Track a character by name"><i class="fa-solid fa-plus"></i></button></span>');
+        const submitAdd = () => {
+            const $inp = $addForm.find('input');
+            const v = String($inp.val() || '').trim();
+            if (v) { handlers.onAddCharacterByName?.(v); $inp.val(''); }
+        };
+        $addForm.find('button').on('click', submitAdd);
+        $addForm.find('input').on('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } });
+        $head.append($addForm, $addAll);
         $cs.append($head);
 
         const members = groupMemberNames();

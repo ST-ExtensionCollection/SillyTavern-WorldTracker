@@ -52,10 +52,12 @@ function openHistMenu($row, history, clockFmt, onPick) {
 }
 
 export function fieldRow(path, field, state, opts = {}) {
-    const { showLock = true, label, onEdit, onToggleLock, extraControlHtml = '', history = null, onPickHistory = null } = opts;
+    const { showLock = true, label, onEdit, onToggleLock, extraControlHtml = '', history = null, onPickHistory = null,
+        autoApproved = false, onToggleAutoApprove = null } = opts;
     const isClock = path === 'clock';
     const locked = !!(field && field.locked);
     const hasHist = !!(history && history.length && onPickHistory);
+    const hasAuto = typeof onToggleAutoApprove === 'function';
     const $row = $(`
         <div class="wt-field-row${locked ? ' wt-locked' : ''}" data-path="${esc(path)}">
             <span class="wt-field-ico"><i class="fa-solid ${iconFor(label || path.split('.').pop())}"></i></span>
@@ -63,6 +65,7 @@ export function fieldRow(path, field, state, opts = {}) {
             <span class="wt-field-value" tabindex="0" role="button" title="Click to edit">${esc(displayValue(path, field, state))}</span>
             ${extraControlHtml}
             ${hasHist ? '<button class="wt-hist-btn" title="Restore a previous value"><i class="fa-solid fa-clock-rotate-left"></i></button>' : ''}
+            ${hasAuto ? `<button class="wt-auto-btn${autoApproved ? ' wt-on' : ''}" title="${autoApproved ? 'Auto-approving this field — click to require review' : 'Requires review — click to auto-approve this field'}"><i class="fa-solid fa-bolt"></i></button>` : ''}
             ${showLock ? `<button class="wt-lock-btn" title="${locked ? 'Locked — click to unlock' : 'Unlocked — click to lock'}"><i class="fa-solid ${locked ? 'fa-lock' : 'fa-lock-open'}"></i></button>` : ''}
         </div>
     `);
@@ -186,6 +189,13 @@ export function fieldRow(path, field, state, opts = {}) {
             e.stopPropagation();
             if ($row.find('.wt-hist-menu').length) { closeHistMenu(); return; }
             openHistMenu($row, history, isClock ? state.clock.displayFormat : null, onPickHistory);
+        });
+    }
+
+    if (hasAuto) {
+        $row.find('.wt-auto-btn').on('click', (e) => {
+            e.stopPropagation();
+            onToggleAutoApprove(path, !autoApproved);
         });
     }
 

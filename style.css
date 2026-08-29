@@ -304,6 +304,25 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-accent);
 }
 
+.wt-auto-btn {
+    background: transparent;
+    border: 1px solid var(--wt-border);
+    color: var(--wt-fg);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    line-height: 1;
+    opacity: 0.55;
+}
+
+.wt-auto-btn:hover { opacity: 1; }
+
+.wt-auto-btn.wt-on {
+    opacity: 1;
+    color: var(--wt-accent);
+    border-color: var(--wt-accent);
+}
+
 .wt-hist-menu {
     position: absolute;
     top: 100%;
@@ -550,6 +569,23 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-accent);
     opacity: 0.85;
     vertical-align: middle;
+}
+
+/* Inline "add character by name" in the Characters section header. */
+.wt-char-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.wt-char-add-inp {
+    max-width: 8.5rem;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.3rem;
+}
+
+.wt-char-add-btn {
+    padding: 0.1rem 0.35rem;
 }
 
 /* "Track every participant" button in the Characters section header. */

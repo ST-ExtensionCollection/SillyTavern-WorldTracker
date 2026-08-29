@@ -87,6 +87,12 @@ message that triggered the update, and a review list in the panel (with a
 badge count). Approve applies it; decline drops it. *Auto‑approve all changes*
 in settings skips the queue entirely.
 
+Per field, the **⚡** button on its detail‑sheet row auto‑approves just that
+field from then on — handy for `clock`, `world.location`, a stat you don't want
+to gate. (The list is global, so a `characters.<name>.fields.<key>` entry only
+matches while a character of that name is tracked; `clock` / `world.*` /
+`userStats.*` are stable.)
+
 ### The clock
 
 The model is **never** asked for a date/time. It's asked only *how much in‑world
@@ -140,12 +146,15 @@ so the model updates *your* appearance from your own messages and the
 narration) and always present. The usual *"never report the player"* prompt
 line is dropped; the tracker is told to report your fields instead.
 
-### Bulk‑add participants
+### Adding characters
 
-The **person‑plus** button in the Characters section header (or `/wt-char sync`)
-starts tracking every current chat participant at once — every group member, or
-the character in a solo chat. The **Narrator character** is skipped (unless it's
-set to *"any turn"*); anyone already tracked is left alone.
+- The **person‑plus** button in the Characters section header (or `/wt-char
+  sync`) tracks every current chat participant at once — group members, or the
+  solo character. The **Narrator character** is skipped (unless *"any turn"*);
+  anyone already tracked is left alone.
+- The **name box** next to it adds one character by name (`/wt-char add <name>`
+  does the same). These stick — they aren't provisional like auto‑added cards.
+- The model can also introduce a character on the narrator's turn.
 
 ### Presence
 
@@ -295,13 +304,20 @@ wiping it. A brand‑new swipe starts from the pre‑query state.
 
 **Panel gear button**: sections + field schema + clock format (see *Sections*).
 
+**Export / Import** (bottom of the drawer): copy this chat's tracked state
+(time, fields, characters, history, snapshots) as JSON, or replace it from a
+paste — for backup, sharing a tuned setup, or cloning it into another chat.
+
 ## Slash commands
 
 - `/wt-track` — run a tracker update now.
-- `/wt-char add <name>` / `/wt-char remove <name>` — start / stop tracking a
-  character.
+- `/wt-char add <name>` / `/wt-char remove <name>` / `/wt-char rename <old> <new>`
+  — start / stop tracking / rename a character.
 - `/wt-char sync` — track every current chat participant (skips the narrator
   unless it's *"any turn"*).
+- `/wt-get <path>` / `/wt-set <path> <value>` — read / write one tracked field
+  from STScript. `path` = `clock` | `world.<key>` | `userStats.<key>` |
+  `characters.<name>.fields.<key>`. A `/wt-set` is logged like a hand‑edit.
 
 ---
 
@@ -348,29 +364,27 @@ approve/decline → apply → refresh panel + re‑inject.
 
 Things worth fixing or at least being aware of:
 
-1. **`autoApproveFields` has no UI.** Only the all‑or‑nothing *Auto‑approve*
-   toggle is exposed, though the per‑path list is honored if set by hand.
-2. **Structured output is `strict: false`** with no `additionalProperties`
+1. **Structured output is `strict: false`** with no `additionalProperties`
    constraint — some backends ignore the schema; the tolerant parser is the
    real safety net. Turn it off if a backend errors on `json_schema`.
-3. **`/wt-char add`** doesn't validate the name against chat participants
+2. **`/wt-char add`** doesn't validate the name against chat participants
    (`/wt-char sync` and the Characters‑header button now cover bulk discovery of
    group members).
-4. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
+3. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
    m.content`) — harmless, should be cleaned.
-5. **No timezone handling** in `clock.js` — in‑world time is fictional so it
+4. **No timezone handling** in `clock.js` — in‑world time is fictional so it
    doesn't matter, but adding elapsed time across a real DST boundary could
    shift an hour.
-6. **New default schema fields don't reach existing installs.** `loadSettings`
+5. **New default schema fields don't reach existing installs.** `loadSettings`
    keeps a persisted `settings.schema` as‑is, so fields added to
    `defaultSchema()` in a later version (e.g. the wardrobe group) only appear
    in new chats / fresh installs. Add them by hand in the gear dialog, or
    *Restore all defaults*.
-7. **Renaming your persona mid‑chat orphans the player card.** A fresh card is
+6. **Renaming your persona mid‑chat orphans the player card.** A fresh card is
    auto‑created for the new name; the old one is now a normal tracked
    character. If it was never touched it's dropped on the next chat change
    (see *Renaming & auto‑cleanup*); otherwise rename or remove it by hand.
-8. **Reverting past a rename** restores the character's old name — snapshots are
+7. **Reverting past a rename** restores the character's old name — snapshots are
    not rewritten by a rename.
 
 ---

@@ -275,6 +275,26 @@ function onSetPresent(name, present) {
     refresh();
 }
 
+/** Toggle a field path in/out of the global always-auto-approve list. */
+function onToggleAutoApprove(path, next) {
+    const s = new Set(settings.autoApproveFields || []);
+    if (next) s.add(path); else s.delete(path);
+    settings.autoApproveFields = [...s];
+    saveSettingsDebounced();
+    vlog(`auto-approve ${next ? '+' : '-'} ${path}`);
+    refresh();
+}
+
+/** Track a character by a name typed in the panel (deliberate — not auto). */
+function onAddCharacterByName(name) {
+    const st = getState();
+    if (!st) return;
+    if (st.characters[name]) { toastr.info(`WorldTracker: "${name}" is already tracked.`); return; }
+    state.ensureCharacter(st, name, settings.schema);
+    log(`add character "${name}"`);
+    refresh();
+}
+
 /** Set/clear how `subject` regards `object`; optionally mirror the reverse. */
 function onSetRel(subject, object, value, mirror) {
     const st = getState();
@@ -382,6 +402,44 @@ function onAddParticipants() {
     log(`add participants: +${added} (pool ${pool.length}${narrator ? `, narrator "${narrator}" skipped` : ''})`);
     if (added) toastr.success(`WorldTracker: now tracking ${added} more character(s).`);
     else toastr.info('WorldTracker: no new participants to add.');
+    refresh();
+}
+
+// ---------------------------------------------------------------------------
+// Import / export the current chat's tracked state (per-chat, JSON)
+// ---------------------------------------------------------------------------
+
+async function onExportState() {
+    const st = getState();
+    if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
+    const json = JSON.stringify(state.deepCopy(st), null, 2);
+    try { await navigator.clipboard?.writeText(json); toastr.success('WorldTracker: state copied to clipboard.'); } catch { /* no clipboard */ }
+    const $ta = $('<textarea class="text_pole" readonly rows="18" style="width:100%;white-space:pre;font-family:monospace;"></textarea>').val(json);
+    try {
+        await ctx.callGenericPopup($ta[0], ctx.POPUP_TYPE.TEXT ?? ctx.POPUP_TYPE.DISPLAY ?? ctx.POPUP_TYPE.CONFIRM, '', { wide: true, large: true, allowVerticalScrolling: true });
+    } catch (e) { log('export popup failed', e); }
+}
+
+async function onImportState() {
+    const st = getState();
+    if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
+    const $wrap = $('<div><p style="margin:0 0 .5rem;">Paste a WorldTracker state export. This <b>replaces</b> this chat\'s tracked world (time, fields, characters, history).</p><textarea class="text_pole" rows="16" style="width:100%;white-space:pre;font-family:monospace;" placeholder="{ ... }"></textarea></div>');
+    let result;
+    try {
+        result = await ctx.callGenericPopup($wrap[0], ctx.POPUP_TYPE.CONFIRM, '', { wide: true, large: true, allowVerticalScrolling: true, okButton: 'Import', cancelButton: 'Cancel' });
+    } catch (e) { log('import popup failed', e); return; }
+    if (result !== ctx.POPUP_RESULT.AFFIRMATIVE) return;
+    let parsed;
+    try { parsed = JSON.parse(String($wrap.find('textarea').val() || '')); } catch (e) { toastr.error('WorldTracker: not valid JSON.'); return; }
+    if (!parsed || typeof parsed !== 'object' || !(parsed.world || parsed.characters || parsed.clock)) {
+        toastr.error("WorldTracker: that doesn't look like a state export.");
+        return;
+    }
+    state.replace(parsed);
+    state.get(settings.schema);            // reconcile missing keys
+    state.applySchema(getState(), settings.schema);
+    log('state imported');
+    toastr.success('WorldTracker: state imported.');
     refresh();
 }
 
@@ -607,6 +665,14 @@ function buildSettingsDrawer() {
                     <textarea id="wt-instr-override" class="text_pole wt-ta" rows="2" placeholder="(none) — appended to the query"></textarea>
                     <small class="notes">Leave blank for defaults. The query already contains the state block, constraints and recent messages.</small>
                 </div>
+                <div class="wt-setting-row">
+                    <label>Tracked state (this chat)</label>
+                    <div class="wt-io-row">
+                        <button id="wt-export" class="menu_button">Export</button>
+                        <button id="wt-import" class="menu_button">Import</button>
+                    </div>
+                    <small class="notes">Copy this chat's tracked world (time, fields, characters, history) as JSON, or replace it from a paste.</small>
+                </div>
             </div>
         </div>`;
     $('#extensions_settings2').append(html);
@@ -687,6 +753,9 @@ function buildSettingsDrawer() {
         .on('change', function () { settings.promptOverrides.system = this.value.trim(); saveSettingsDebounced(); });
     $('#wt-instr-override').val(settings.promptOverrides.instruction || '')
         .on('change', function () { settings.promptOverrides.instruction = this.value.trim(); saveSettingsDebounced(); });
+
+    $('#wt-export').on('click', () => onExportState());
+    $('#wt-import').on('click', () => onImportState());
 }
 
 // ---------------------------------------------------------------------------
@@ -732,6 +801,45 @@ function registerSlashCommands() {
         helpString: 'WorldTracker: run a tracker update now.',
         callback: () => { onManualUpdate(); return ''; },
     }));
+
+    const FIELD_PATH_HELP = 'path: clock | world.<key> | userStats.<key> | characters.<name>.fields.<key>';
+
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'wt-get',
+        helpString: `WorldTracker: read a tracked field. ${FIELD_PATH_HELP}`,
+        unnamedArgumentList: [
+            SlashCommandArgument.fromProps({ description: 'field path', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
+        ],
+        callback: (_args, value) => {
+            const path = String(value).trim();
+            const st = getState();
+            if (!st || !path) return '';
+            if (path === 'clock') return String(st.clock.iso);
+            const f = state.fieldAt(st, path);
+            return (f && typeof f === 'object' && 'value' in f) ? String(f.value) : '';
+        },
+    }));
+
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'wt-set',
+        helpString: `WorldTracker: set a tracked field. /wt-set (path) (value). ${FIELD_PATH_HELP}`,
+        unnamedArgumentList: [
+            SlashCommandArgument.fromProps({ description: 'field path', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
+            SlashCommandArgument.fromProps({ description: 'new value', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
+        ],
+        callback: (_args, value) => {
+            const parts = String(value).trim().split(/\s+/);
+            const path = parts.shift();
+            const val = parts.join(' ');
+            const st = getState();
+            if (!st || !path) return '';
+            if (path === 'clock') { onEdit('clock', { __setIso: val }, { trigger: 'edit' }); return ''; }
+            const f = state.fieldAt(st, path);
+            if (!f || typeof f !== 'object' || !('value' in f)) { toastr.warning(`WorldTracker: no field at "${path}".`); return ''; }
+            onEdit(path, f.type === 'number' ? Number(val) : val, { trigger: 'edit' });
+            return '';
+        },
+    }));
   } catch (err) {
     console.warn(`[${MODULE_NAME}] slash command registration failed`, err);
   }
@@ -753,6 +861,7 @@ jQuery(async () => {
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
         onToggleFieldGroup, onSetPresent, onAddParticipants, onReorderCharacters,
         onRevertTurn, getStateAsOf, onSetRel, onToggleRels, onRenameCharacter,
+        onToggleAutoApprove, onAddCharacterByName,
         fieldHistory: (path) => { const s = getState(); return s ? state.fieldHistory(s, path) : []; },
     } });
 

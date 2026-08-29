@@ -76,16 +76,22 @@ function unpadChat() {
     document.getElementById(SPACER_ID)?.remove();
 }
 
-/** Character names in the current group chat (empty for a solo chat). */
-export function groupMemberNames(ctx) {
+/**
+ * Character names in the current group chat (empty for a solo chat).
+ * Reads the context LIVE — a context captured at boot has empty groups /
+ * characters / groupId (nothing was loaded yet).
+ */
+export function groupMemberNames() {
     try {
-        const gid = ctx.groupId;
+        const c = globalThis.SillyTavern.getContext();
+        const gid = c.groupId;
         if (!gid) return [];
-        const group = (ctx.groups || []).find((g) => String(g.id) === String(gid));
+        const group = (c.groups || []).find((g) => String(g.id) === String(gid));
         if (!group) return [];
-        const chars = ctx.characters || [];
+        const chars = c.characters || [];
         return (group.members || [])
-            .map((avatar) => chars.find((c) => c.avatar === avatar)?.name)
+            .map((avatar) => chars.find((ch) => ch.avatar === avatar)?.name
+                || String(avatar).replace(/\.(png|webp|jpe?g|gif)$/i, ''))
             .filter(Boolean);
     } catch {
         return [];
@@ -281,7 +287,7 @@ function buildDetailBody() {
     const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         const $cs = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
-        const members = groupMemberNames(cfg.context);
+        const members = groupMemberNames();
         for (const name of names) {
             const entry = state.characters[name];
             // "By X" options = group members + other tracked characters + the

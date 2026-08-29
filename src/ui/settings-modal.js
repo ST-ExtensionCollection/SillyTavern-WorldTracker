@@ -106,7 +106,7 @@ export async function openSettingsModal(ctx, settings, onSave) {
     const $c = $('<div class="wt-cfg"></div>');
 
     // --- narrator character ---
-    const members = groupMemberNames(ctx);
+    const members = groupMemberNames();
     const curNarr = settings.narratorName || '';
     const narrOpts = [...new Set(members.concat(curNarr && !members.includes(curNarr) ? [curNarr] : []))];
     const $narr = $(`

@@ -508,6 +508,8 @@ jQuery(async () => {
         state.get(settings.schema); // seed/reconcile for the new chat
         refresh();
     });
+    // Group membership changed -> the "By <name>" / narrator lists depend on it.
+    if (event_types.GROUP_UPDATED) eventSource.on(event_types.GROUP_UPDATED, () => refresh());
 
     // --- auto-update after messages ---
     let genActive = false;

@@ -134,6 +134,7 @@ function reconcile(state, schema) {
         if (!name.trim()) { delete state.characters[name]; continue; } // empty key = junk
         const c = state.characters[name];
         if (!c.rels || typeof c.rels !== 'object') c.rels = {};
+        if (isPlayerName(name)) c.isPersona = true; // mark the current persona's card so a later swap can rename it
     }
     for (const f of s.world ?? []) {
         if (!state.world[f.key]) {
@@ -547,6 +548,7 @@ export function ensureCharacter(state, name, schema, opts = {}) {
         const template = isPlayerName(name) ? (s.player?.fields ?? []) : (s.character?.fields ?? []);
         const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, order: Object.keys(state.characters).length, fields: {}, rels: {} };
         if (opts.auto) entry.auto = true;
+        if (opts.persona) entry.isPersona = true;
         for (const f of template) {
             entry.fields[f.key] = {
                 value: f.default ?? '',
@@ -614,8 +616,29 @@ export function ensurePlayerTracked(state, schema) {
     if (!state) return false;
     const name = personaName();
     if (!name || state.characters[name]) return false;
-    ensureCharacter(state, name, schema, { auto: true });
+    ensureCharacter(state, name, schema, { auto: true, persona: true });
     return true;
+}
+
+/**
+ * If the persona changed since its card was made, carry the card over by
+ * renaming it (so a swap doesn't leave a stale card) — unless the new persona
+ * name is already tracked, in which case just drop the stale marker.
+ * @returns {boolean} true if a rename happened
+ */
+export function syncPersonaCard(state, schema) {
+    if (!state || !state.characters) return false;
+    const persona = personaName();
+    if (!persona) return false;
+    const stale = Object.keys(state.characters).find((n) => n !== persona && state.characters[n].isPersona);
+    if (!stale) return false;
+    if (!state.characters[persona]) {
+        renameCharacter(state, stale, persona);
+        return true;
+    }
+    state.characters[stale].isPersona = false;
+    save();
+    return false;
 }
 
 /** True when a character card holds real data (so it must not be auto-pruned). */

@@ -168,6 +168,7 @@ async function onManualUpdate(opts = {}) {
     }
 
     const c = SillyTavern.getContext();
+    if (settings.trackPlayer) state.syncPersonaCard(st, settings.schema); // catch a persona swap before this pass
     const n = Math.max(1, Number(settings.includeLastXMessages) || 6);
     const chat = c.chat || [];
     const srcId = Number.isInteger(opts.sourceMessageId)
@@ -786,6 +787,9 @@ jQuery(async () => {
         state.get(settings.schema); // seed/reconcile for the new chat
         const st = getState();
         if (st) {
+            // Persona changed since this card was made? Carry its data over by
+            // renaming, so a swap (even on message 0) doesn't leave a stale card.
+            if (settings.trackPlayer && state.syncPersonaCard(st, settings.schema)) log('persona card renamed to match');
             const keep = new Set([ctx.name1, ctx.name2, ...groupMemberNames()].filter(Boolean));
             const pruned = state.pruneAutoCards(st, keep, settings.schema);
             if (pruned) vlog(`pruned ${pruned} untouched auto card(s)`);
@@ -897,8 +901,9 @@ jQuery(async () => {
     // keepNames would be wrong. The first CHAT_CHANGED handles it with real context.
     try {
         const st0 = getState();
-        if (st0 && settings.enabled && settings.trackPlayer && state.ensurePlayerTracked(st0, settings.schema)) {
-            state.applySchema(st0, settings.schema);
+        if (st0 && settings.enabled && settings.trackPlayer) {
+            state.syncPersonaCard(st0, settings.schema);
+            if (state.ensurePlayerTracked(st0, settings.schema)) state.applySchema(st0, settings.schema);
         }
     } catch (e) { vlog('boot ensurePlayerTracked failed', e); }
 

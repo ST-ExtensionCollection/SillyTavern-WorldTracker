@@ -174,6 +174,20 @@ write the reverse. The tracker proposes changes when a scene clearly shifts a
 bond, and relationships appear in the `[World State]` injection as
 `rels: Friend→Alice,Bob; Rival→Carol`.
 
+### Renaming & auto‑cleanup
+
+The **pencil** on a card renames it everywhere in live state — its fields,
+relationships, history, other cards' *"By \<name\>"* updater, and the *Narrator
+character* setting all follow. (Snapshots keep the old name, so reverting *past*
+a rename resurrects it.) Also `/wt-char rename <old> <new>`.
+
+Cards added automatically (the persona auto‑track, **+ participants**, a
+model‑introduced NPC) are marked provisional. On a chat change, any that are
+**untouched** — no edited field, no relationship, still present, no history —
+and aren't a current participant are dropped, so switching character/persona
+doesn't leave a stale empty card behind. Edit anything on a card and it's kept
+for good.
+
 ### Injecting state into the chat
 
 *Feed tracked state to the roleplay model* (on by default) inserts a compact
@@ -348,9 +362,12 @@ Things worth fixing or at least being aware of:
    `defaultSchema()` in a later version (e.g. the wardrobe group) only appear
    in new chats / fresh installs. Add them by hand in the gear dialog, or
    *Restore all defaults*.
-7. **Renaming your persona mid‑chat orphans the player card.** The old‑name
-   card becomes a normal tracked character on the next reconcile and a fresh
-   one is auto‑created for the new name. Remove the stale one by hand.
+7. **Renaming your persona mid‑chat orphans the player card.** A fresh card is
+   auto‑created for the new name; the old one is now a normal tracked
+   character. If it was never touched it's dropped on the next chat change
+   (see *Renaming & auto‑cleanup*); otherwise rename or remove it by hand.
+8. **Reverting past a rename** restores the character's old name — snapshots are
+   not rewritten by a rename.
 
 ---
 

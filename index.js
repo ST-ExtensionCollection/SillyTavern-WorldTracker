@@ -550,6 +550,14 @@ jQuery(async () => {
     buildSettingsDrawer();
     registerSlashCommands();
 
+    // Clicking into the chat input rolls the expanded banner sheet back up, so
+    // it doesn't sit over the conversation while you type.
+    $(document).on('pointerdown', '#send_textarea', () => {
+        if (settings.enabled && settings.bannerExpanded && (settings.uiMode || 'banner') === 'banner') {
+            onToggleExpand(false);
+        }
+    });
+
     eventSource.on(event_types.CHAT_CHANGED, () => {
         let id;
         try { id = ctx.getCurrentChatId?.(); } catch { /* ignore */ }

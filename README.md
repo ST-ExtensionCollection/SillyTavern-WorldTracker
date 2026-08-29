@@ -214,12 +214,27 @@ The gear dialog's **Profile** bar stores named copies of everything below it
 Switching or creating a profile applies it immediately. On chat change the
 extension picks binding → default → whatever's active.
 
+### Turn history & per‑message cards
+
+Every applied change (tracker‑approved or hand‑edited) is appended to a per‑chat
+**history log** (last 120 records). From it:
+
+- Each tracked message shows an inline **"changes this turn"** card — a
+  read‑only `old → new` list for the message's *active swipe*, plus **Revert
+  turn** (undo everything that turn did) and **State as of here** (the
+  `[World State]` block reconstructed for that point).
+- Deleting a message or swipe prunes the log from there on, same as snapshots.
+
 ### Swipe / regenerate / delete safety
 
-Before each tracker query, a snapshot of the state is taken (keyed by message
-index, last 40 kept). Swiping, regenerating, or deleting a message reverts the
-state to the nearest earlier snapshot and prunes proposals from that message
-onward — so a re‑roll doesn't compound tracker changes.
+Before each tracker query a snapshot of the state is taken (keyed by message
+index, last 40 kept). Deleting or regenerating a message rewinds state to the
+nearest earlier snapshot and prunes proposals/history from that point.
+
+**Swipes are tracked per candidate.** Each swipe's tracker pass is logged
+against `(message, swipe_id)`; flipping between already‑generated swipes rebuilds
+that swipe's state from its own records (pre‑query snapshot + replay) instead of
+wiping it. A brand‑new swipe starts from the pre‑query state.
 
 ---
 
@@ -262,7 +277,8 @@ src/
   settings.js       global config + schema, extension_settings.WorldTracker
   schema.js         default field definitions (world / userStats / character / player)
   state.js          canonical per-chat state in chat_metadata; path helpers,
-                    pending queue, pre-query snapshots, applySchema()
+                    pending queue, pre-query snapshots, turn-history log,
+                    per-swipe restore, applySchema()
   clock.js          dependency-free parse / format / addElapsed
   prompt.js         buildTrackerPrompt(), buildResponseSchema(), inScope()
   request.js        runTrackerRequest() — Connection Manager (streamed) or
@@ -294,43 +310,30 @@ approve/decline → apply → refresh panel + re‑inject.
 
 Things worth fixing or at least being aware of:
 
-1. **Mid‑chat deletes revert wrong.** `MESSAGE_DELETED` fires with the new
-   `chat.length`, not the deleted index. That's only the deleted message's
-   index when you delete the *last* message. Deleting a message in the middle
-   restores from the wrong snapshot and doesn't prune the right proposals, and
-   every later snapshot / proposal is now off by the shift. Swipe and
-   last‑message delete are fine.
-2. **Updates always use the last N messages.** When the triggering message
-   isn't the newest (e.g. re‑rolling an older reply), the query still includes
-   messages *after* it — leaking later context into a past update. Should slice
-   up to the source message.
-3. **No per‑swipe tracker state.** Swiping left/right between already‑generated
-   swipes reverts to "before this message ran", losing whatever each swipe's
-   own tracker pass produced.
-4. **`autoApproveFields` has no UI.** Only the all‑or‑nothing *Auto‑approve*
+1. **`autoApproveFields` has no UI.** Only the all‑or‑nothing *Auto‑approve*
    toggle is exposed, though the per‑path list is honored if set by hand.
-5. **Snapshots are full‑state JSON copies** (up to 40) stored in chat metadata —
+2. **Snapshots are full‑state JSON copies** (up to 40) stored in chat metadata —
    noticeable bloat on long chats with many fields/characters. Deltas or a
    smaller cap would help.
-6. **Structured output is `strict: false`** with no `additionalProperties`
+3. **Structured output is `strict: false`** with no `additionalProperties`
    constraint — some backends ignore the schema; the tolerant parser is the
    real safety net. Turn it off if a backend errors on `json_schema`.
-7. **`/wt-char add`** doesn't validate the name against chat participants
+4. **`/wt-char add`** doesn't validate the name against chat participants
    (`/wt-char sync` and the Characters‑header button now cover bulk discovery of
    group members).
-8. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
+5. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
    m.content`) — harmless, should be cleaned.
-9. **No timezone handling** in `clock.js` — in‑world time is fictional so it
+6. **No timezone handling** in `clock.js` — in‑world time is fictional so it
    doesn't matter, but adding elapsed time across a real DST boundary could
    shift an hour.
-10. **New default schema fields don't reach existing installs.** `loadSettings`
-    keeps a persisted `settings.schema` as‑is, so fields added to
-    `defaultSchema()` in a later version (e.g. the wardrobe group) only appear
-    in new chats / fresh installs. Add them by hand in the gear dialog, or
-    *Restore all defaults*.
-11. **Renaming your persona mid‑chat orphans the player card.** The old‑name
-    card becomes a normal tracked character on the next reconcile and a fresh
-    one is auto‑created for the new name. Remove the stale one by hand.
+7. **New default schema fields don't reach existing installs.** `loadSettings`
+   keeps a persisted `settings.schema` as‑is, so fields added to
+   `defaultSchema()` in a later version (e.g. the wardrobe group) only appear
+   in new chats / fresh installs. Add them by hand in the gear dialog, or
+   *Restore all defaults*.
+8. **Renaming your persona mid‑chat orphans the player card.** The old‑name
+   card becomes a normal tracked character on the next reconcile and a fresh
+   one is auto‑created for the new name. Remove the stale one by hand.
 
 ---
 

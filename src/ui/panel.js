@@ -448,10 +448,12 @@ function buildDetailBody() {
                     <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only (${esc(name)})</option>
                     ${byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
                 </select>`}
+                ${isPlayer ? '' : `<button class="wt-char-rename" title="Rename ${esc(name)}"><i class="fa-solid fa-pen"></i></button>`}
                 <button class="wt-char-remove" title="Stop tracking ${esc(name)}"><i class="fa-solid fa-trash"></i></button>
             </div></div>`);
             $c.find('.wt-char-present').on('click', () => handlers.onSetPresent?.(name, absent));
             $c.find('.wt-updater').on('change', function () { handlers.onSetUpdater?.(name, this.value); });
+            $c.find('.wt-char-rename').on('click', () => handlers.onRenameCharacter?.(name));
             $c.find('.wt-char-remove').on('click', () => handlers.onRemoveCharacter?.(name));
             const $fields = $('<div class="wt-char-fields"></div>');
             appendFieldRows($fields, Object.entries(entry.fields), 'char',

@@ -465,6 +465,7 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-char-remove,
+.wt-char-rename,
 .wt-char-present {
     background: transparent;
     border: none;
@@ -474,6 +475,7 @@ body:has(#wt-inline) #extensionTopBar {
 }
 
 .wt-char-remove:hover,
+.wt-char-rename:hover,
 .wt-char-present:hover {
     opacity: 1;
 }

@@ -241,6 +241,31 @@ function onRemoveCharacter(name) {
     refresh();
 }
 
+async function promptText(title, def = '') {
+    try {
+        const v = await ctx.Popup.show.input(title, '', def);
+        return (v ?? '').trim();
+    } catch {
+        return (window.prompt(title, def) ?? '').trim();
+    }
+}
+
+/** Rename a tracked character everywhere in live state. */
+function renameCharacter(oldName, newName) {
+    const st = getState();
+    if (!st) return;
+    const r = state.renameCharacter(st, oldName, newName);
+    if (!r.ok) { toastr.warning(`WorldTracker: ${r.reason}.`); return; }
+    if (settings.narratorName === oldName) { settings.narratorName = newName; saveSettingsDebounced(); }
+    log(`renamed "${oldName}" -> "${newName}"`);
+    refresh();
+}
+
+async function onRenameCharacter(oldName) {
+    const newName = await promptText(`Rename tracked character "${oldName}" to:`, oldName);
+    if (newName) renameCharacter(oldName, newName);
+}
+
 function onSetPresent(name, present) {
     const st = getState();
     if (!st) return;
@@ -350,7 +375,7 @@ function onAddParticipants() {
     let added = 0;
     for (const name of pool) {
         if (!name || name === narrator || st.characters[name]) continue;
-        state.ensureCharacter(st, name, settings.schema);
+        state.ensureCharacter(st, name, settings.schema, { auto: true });
         added++;
     }
     log(`add participants: +${added} (pool ${pool.length}${narrator ? `, narrator "${narrator}" skipped` : ''})`);
@@ -674,18 +699,24 @@ function registerSlashCommands() {
 
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: 'wt-char',
-        helpString: 'WorldTracker: manage tracked characters. /wt-char add|remove (name) — or /wt-char sync to track every chat participant.',
+        helpString: 'WorldTracker: manage tracked characters. /wt-char add|remove (name), /wt-char rename (old) (new), or /wt-char sync to track every chat participant.',
         unnamedArgumentList: [
-            SlashCommandArgument.fromProps({ description: 'add|remove|sync', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
-            SlashCommandArgument.fromProps({ description: 'character name (not needed for sync)', typeList: [ARGUMENT_TYPE.STRING], isRequired: false }),
+            SlashCommandArgument.fromProps({ description: 'add|remove|rename|sync', typeList: [ARGUMENT_TYPE.STRING], isRequired: true }),
+            SlashCommandArgument.fromProps({ description: 'character name(s) (not needed for sync)', typeList: [ARGUMENT_TYPE.STRING], isRequired: false }),
         ],
         callback: (_args, value) => {
             const parts = String(value).trim().split(/\s+/);
             const op = parts.shift();
-            const name = parts.join(' ');
             const st = getState();
             if (!st) return '';
             if (op === 'sync' || op === 'all') { onAddParticipants(); return ''; }
+            if (op === 'rename') {
+                const newName = parts.pop();
+                const oldName = parts.join(' ');
+                if (oldName && newName) renameCharacter(oldName, newName);
+                return '';
+            }
+            const name = parts.join(' ');
             if (!name) return '';
             if (op === 'add') state.ensureCharacter(st, name, settings.schema);
             else if (op === 'remove') state.removeCharacter(st, name);
@@ -720,7 +751,7 @@ jQuery(async () => {
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
         onToggleFieldGroup, onSetPresent, onAddParticipants, onReorderCharacters,
-        onRevertTurn, getStateAsOf, onSetRel, onToggleRels,
+        onRevertTurn, getStateAsOf, onSetRel, onToggleRels, onRenameCharacter,
         fieldHistory: (path) => { const s = getState(); return s ? state.fieldHistory(s, path) : []; },
     } });
 
@@ -755,6 +786,9 @@ jQuery(async () => {
         state.get(settings.schema); // seed/reconcile for the new chat
         const st = getState();
         if (st) {
+            const keep = new Set([ctx.name1, ctx.name2, ...groupMemberNames()].filter(Boolean));
+            const pruned = state.pruneAutoCards(st, keep, settings.schema);
+            if (pruned) vlog(`pruned ${pruned} untouched auto card(s)`);
             if (settings.enabled && settings.trackPlayer) state.ensurePlayerTracked(st, settings.schema);
             state.applySchema(st, settings.schema);
         }
@@ -859,6 +893,8 @@ jQuery(async () => {
     setTimeout(() => replaceBanner(), 1500);
 
     // A chat may already be open at boot (no CHAT_CHANGED fires for it).
+    // Don't prune auto cards here — group/context isn't reliably loaded yet, so
+    // keepNames would be wrong. The first CHAT_CHANGED handles it with real context.
     try {
         const st0 = getState();
         if (st0 && settings.enabled && settings.trackPlayer && state.ensurePlayerTracked(st0, settings.schema)) {

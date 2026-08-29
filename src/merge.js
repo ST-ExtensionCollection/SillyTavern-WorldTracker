@@ -250,7 +250,7 @@ export function applyProposal(st, p, schema) {
     }
 
     if (p.kind === 'new-character') {
-        const entry = state.ensureCharacter(st, p.rawTo.name, schema);
+        const entry = state.ensureCharacter(st, p.rawTo.name, schema, { auto: true });
         for (const [fk, v] of Object.entries(p.rawTo.fields || {})) {
             if (fk === 'present') { entry.present = v !== false; continue; }
             const f = entry.fields[fk];

@@ -156,6 +156,14 @@ present first). The tracker can also set presence on its own — it's asked for 
 someone arrive or leave. Absent characters are tagged **(not present)** in the
 injected `[World State]` block.
 
+### Reordering cards
+
+Drag a card by its **grip** (`⠿`, left of the eye toggle) to reorder it. Your
+order is the sort key within each block; the player card stays pinned on top and
+absent characters still sink to the bottom. Order is **per chat** (stored in
+that chat's metadata) and reverts with a swipe/regenerate like any other tracked
+value.
+
 ### Injecting state into the chat
 
 *Feed tracked state to the roleplay model* (on by default) inserts a compact
@@ -174,8 +182,10 @@ The **gear** button on the panel opens the schema editor:
 - **Character fields** is the template for each tracked NPC; **Your character**
   is a separate template for the persona's own card (see *Your own character*).
 - add / remove / rename fields, pick a type (`text` / `number` / `enum`), set a
-  unit (number) or max. For `enum`, the pencil button opens an editor: drag to
-  reorder, rename, star one as the default, delete, or import from a comma list.
+  unit (number) or max. Drag a field row by its **grip** to reorder it (the row
+  order is the panel display order). For `enum`, the pencil button opens an
+  editor: drag to reorder, rename, star one as the default, delete, or import
+  from a comma list.
 - **Collapsible #** (the small `–` / `0`–`9` picker per field row) — fields in
   the same section sharing a digit fold into one collapsible group in the panel
   (placed where the group's first field sits). `–` = its own row. The default
@@ -266,7 +276,7 @@ src/
     panel.js        banner / float / dock, detail sheet, inline cards
     fields.js       one editable field row (incl. the clock editor)
     format.js       display helpers (comma-formatted numbers)
-    drag.js         makeDraggable / makeResizable (pointer + touch)
+    drag.js         makeDraggable / makeResizable (pointer + touch); makeSortable (HTML5 DnD list reorder)
     settings-modal.js  the gear-button schema editor
 ```
 

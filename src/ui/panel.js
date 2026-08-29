@@ -189,7 +189,7 @@ export function renderPanel() {
         else if (mode === 'float') renderFloat();
         else renderBanner();
     }
-    renderCards();
+    renderMessageCards();
 
     if (prevScroll) {
         const restore = () => { const el = document.querySelector(SCROLLER_SEL); if (el && el.scrollTop !== prevScroll) el.scrollTop = prevScroll; };
@@ -246,29 +246,83 @@ function buildReviewSection(pending) {
     return $q;
 }
 
-/** Inline diff cards attached to the messages that triggered pending changes. */
-function renderCards() {
+/** One read-only applied-change row (mirrors buildPendingItem, no buttons). */
+function historyItem(ch) {
+    return $(`
+        <div class="wt-review-item wt-history-item">
+            <div class="wt-review-label">${esc(ch.label || ch.path)}</div>
+            <div class="wt-review-diff"><span class="wt-from">${esc(ch.before ?? '—')}</span><i class="fa-solid fa-arrow-right"></i><span class="wt-to">${esc(ch.after ?? '—')}</span></div>
+        </div>
+    `);
+}
+
+/**
+ * Inline per-message cards: still-pending proposals (with approve/decline) plus
+ * a read-only "changes this turn" list from the history log, with a
+ * revert-this-turn button and a lazy full-state expander.
+ */
+function renderMessageCards() {
     $('.wt-card').remove();
     const state = cfg.getState();
-    if (!cfg.settings.enabled || !state || !state.pending.length) return;
+    const { settings, handlers } = cfg;
+    if (!settings.enabled || !state) return;
 
     const byMsg = new Map();
-    for (const p of state.pending) {
-        const id = p.sourceMessageId;
-        if (id == null) continue;
-        if (!byMsg.has(id)) byMsg.set(id, []);
-        byMsg.get(id).push(p);
+    const bump = (id) => { if (!byMsg.has(id)) byMsg.set(id, { pending: [], applied: [] }); return byMsg.get(id); };
+    for (const p of state.pending) { if (p.sourceMessageId != null) bump(p.sourceMessageId).pending.push(p); }
+    if (settings.showMessageCards !== false) {
+        for (const r of state.history || []) {
+            if (r.mesId == null || r.trigger === 'revert-turn') continue;
+            bump(r.mesId).applied.push(r);
+        }
     }
-    for (const [mesId, items] of byMsg) {
+
+    for (const [mesId, group] of byMsg) {
         const mes = document.querySelector(`.mes[mesid="${mesId}"]`);
         const anchor = mes?.querySelector('.mes_text');
         if (!mes || !anchor) continue;
-        const $card = $(`<div class="wt-card"><div class="wt-card-head"><i class="fa-solid fa-compass"></i> WorldTracker — ${items.length} proposed change${items.length > 1 ? 's' : ''}</div></div>`);
-        for (const p of items) $card.append(buildPendingItem(p));
-        const $foot = $(`<div class="wt-card-foot"><button class="wt-approve-all">Approve all</button><button class="wt-decline-all">Decline all</button></div>`);
-        $foot.find('.wt-approve-all').on('click', () => cfg.handlers.onApproveAll?.());
-        $foot.find('.wt-decline-all').on('click', () => cfg.handlers.onDeclineAll?.());
-        $card.append($foot);
+
+        const activeSwipe = SillyTavern.getContext().chat?.[mesId]?.swipe_id ?? 0;
+        const appliedChanges = [];
+        for (const r of group.applied) {
+            if (r.swipeId != null && r.swipeId !== activeSwipe) continue;
+            for (const ch of r.changes || []) appliedChanges.push(ch);
+        }
+        if (!group.pending.length && !appliedChanges.length) continue;
+
+        const $card = $('<div class="wt-card"></div>');
+
+        if (group.pending.length) {
+            $card.append(`<div class="wt-card-head"><i class="fa-solid fa-compass"></i> WorldTracker — ${group.pending.length} proposed change${group.pending.length > 1 ? 's' : ''}</div>`);
+            for (const p of group.pending) $card.append(buildPendingItem(p));
+            const $pf = $(`<div class="wt-card-foot"><button class="wt-approve-all">Approve all</button><button class="wt-decline-all">Decline all</button></div>`);
+            $pf.find('.wt-approve-all').on('click', () => handlers.onApproveAll?.());
+            $pf.find('.wt-decline-all').on('click', () => handlers.onDeclineAll?.());
+            $card.append($pf);
+        }
+
+        if (appliedChanges.length) {
+            const collapsed = !!settings.messageCardsCollapsed;
+            const $applied = $(`<div class="wt-card-applied${collapsed ? ' wt-collapsed' : ''}"></div>`);
+            const $head = $(`<button class="wt-card-applied-head" type="button"><i class="fa-solid ${collapsed ? 'fa-chevron-right' : 'fa-chevron-down'}"></i> ${appliedChanges.length} change${appliedChanges.length > 1 ? 's' : ''} this turn</button>`);
+            const $list = $('<div class="wt-card-applied-list"></div>');
+            for (const ch of appliedChanges) $list.append(historyItem(ch));
+            $head.on('click', () => {
+                $applied.toggleClass('wt-collapsed');
+                $head.find('i').attr('class', `fa-solid ${$applied.hasClass('wt-collapsed') ? 'fa-chevron-right' : 'fa-chevron-down'}`);
+            });
+            const $foot = $(`<div class="wt-card-foot"><button class="wt-revert-turn" title="Undo all of this turn's tracker changes"><i class="fa-solid fa-arrow-rotate-left"></i> Revert turn</button><button class="wt-state-asof">State as of here</button></div>`);
+            const $dump = $('<pre class="wt-state-dump"></pre>').prop('hidden', true);
+            $foot.find('.wt-revert-turn').on('click', () => handlers.onRevertTurn?.(mesId, activeSwipe));
+            $foot.find('.wt-state-asof').on('click', () => {
+                if (!$dump.prop('hidden')) { $dump.prop('hidden', true); return; }
+                if (!$dump.data('loaded')) { $dump.text(handlers.getStateAsOf?.(mesId) || '(unavailable)'); $dump.data('loaded', true); }
+                $dump.prop('hidden', false);
+            });
+            $applied.append($head, $list, $foot, $dump);
+            $card.append($applied);
+        }
+
         anchor.before($card[0]);
     }
 }

@@ -600,6 +600,53 @@ body:has(#wt-inline) #extensionTopBar {
     padding: 0.15rem 0.5rem;
 }
 
+.wt-card-foot button:hover {
+    border-color: var(--wt-accent);
+    color: var(--wt-accent);
+}
+
+/* Applied-changes block on a per-message card (read-only history). */
+.wt-card-applied {
+    margin-top: 0.35rem;
+    border-top: 1px dashed var(--wt-border);
+    padding-top: 0.3rem;
+}
+
+.wt-card-applied-head {
+    background: transparent;
+    border: none;
+    color: var(--wt-fg);
+    opacity: 0.85;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+}
+
+.wt-card-applied-head:hover { opacity: 1; }
+
+.wt-card-applied.wt-collapsed .wt-card-applied-list { display: none; }
+
+.wt-history-item .wt-review-diff { grid-column: 1 / -1; }
+
+.wt-state-dump {
+    grid-column: 1 / -1;
+    margin: 0.35rem 0 0;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--wt-border);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--wt-fg) 6%, transparent);
+    font-size: 0.82em;
+    white-space: pre-wrap;
+    max-height: 14rem;
+    overflow-y: auto;
+}
+
 .wt-review-btns .wt-approve-exp {
     background: transparent;
     border: 1px solid var(--wt-border);

@@ -306,7 +306,7 @@ function buildDetailBody() {
                 <span class="wt-char-name">${esc(name)}</span>
                 <select class="wt-updater" title="Who updates this character">
                     <option value="narrator"${entry.updater === 'narrator' ? ' selected' : ''}>Narrator</option>
-                    <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only</option>
+                    <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only (${esc(name)})</option>
                     ${byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
                     <option value="__custom__">By a custom name…</option>
                 </select>

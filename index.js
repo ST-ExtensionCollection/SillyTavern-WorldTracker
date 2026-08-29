@@ -185,9 +185,9 @@ async function onManualUpdate(opts = {}) {
     // Re-processing a message (pressing the arrows again) must recompute the
     // clock from the PRE-turn time, not from where a prior pass already left it,
     // or repeated passes compound the advance. Other fields may churn freely.
-    const baseline = st.snapshots && st.snapshots[srcId];
-    if (baseline && baseline.clock && baseline.clock.iso) {
-        st.clock.iso = baseline.clock.iso;
+    if (st.snapshots && (srcId in st.snapshots)) {
+        const baseData = state.peekSnapshot(st, srcId); // exact key exists -> pre-turn state
+        if (baseData && baseData.clock && baseData.clock.iso) st.clock.iso = baseData.clock.iso;
     }
 
     const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn });

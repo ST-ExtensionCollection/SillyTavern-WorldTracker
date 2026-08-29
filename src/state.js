@@ -20,6 +20,7 @@
 //   }
 
 import { defaultSchema, normGroup, UPDATER_NARRATOR } from './schema.js';
+import { diffJson, applyJsonPatch } from './diff.js';
 import { vlog, warn } from './log.js';
 
 export const META_KEY = 'WorldTracker';
@@ -121,6 +122,13 @@ function reconcile(state, schema) {
     if (!state.characters) state.characters = {};
     if (!Array.isArray(state.pending)) state.pending = [];
     if (!state.snapshots || typeof state.snapshots !== 'object') state.snapshots = {};
+    // v1 snapshots were bare {clock,world,userStats,characters}; wrap them as keyframes.
+    for (const k of Object.keys(state.snapshots)) {
+        const v = state.snapshots[k];
+        if (v && typeof v === 'object' && !('kf' in v) && !('base' in v) && (v.world || v.characters || v.clock)) {
+            state.snapshots[k] = { kf: true, data: v };
+        }
+    }
     if (!Array.isArray(state.history)) state.history = [];
     for (const name of Object.keys(state.characters)) {
         if (!name.trim()) { delete state.characters[name]; continue; } // empty key = junk
@@ -202,44 +210,114 @@ export function replace(newState) {
 
 const SNAPSHOT_CAP = 40;
 const SNAPSHOT_KEYS = ['clock', 'world', 'userStats', 'characters'];
+const KEYFRAME_EVERY = 8; // one full copy per this many snapshots; the rest are deltas
+
+/**
+ * A snapshot entry is either
+ *   { kf: true, data: { clock, world, userStats, characters } }   — full copy
+ *   { base: <lowerKey>, patch: <diffJson result> }                — forward delta
+ * (or, on chats saved before v2, the bare {clock,world,userStats,characters};
+ *  reconcile() rewraps those as keyframes.)
+ */
+
+/** Full {clock,world,userStats,characters} for an exact snapshot key, or null. */
+function readSnap(state, key, depth = 0) {
+    const e = state.snapshots?.[key];
+    if (!e || depth > 200) return null;
+    if (e.kf) return deepCopy(e.data || null);
+    if (!('base' in e)) { // legacy bare shape
+        const out = {};
+        for (const k of SNAPSHOT_KEYS) if (e[k] != null) out[k] = deepCopy(e[k]);
+        return Object.keys(out).length ? out : null;
+    }
+    const base = readSnap(state, e.base, depth + 1);
+    if (!base) { warn(`readSnap: broken delta chain at #${key} (base #${e.base})`); return null; }
+    try { return applyJsonPatch(base, e.patch); } catch (err) { warn('readSnap: patch failed', err); return null; }
+}
+
+function nearestSnapKey(state, index) {
+    if (!state?.snapshots || typeof state.snapshots !== 'object') return null;
+    const k = Object.keys(state.snapshots).map(Number).filter((n) => n <= index).sort((a, b) => b - a)[0];
+    return k == null ? null : k;
+}
+
+function deltasSinceKeyframe(state, key) {
+    let hops = 0;
+    let k = key;
+    while (hops < 300) {
+        const e = state.snapshots[k];
+        if (!e || e.kf || !('base' in e)) return hops;
+        k = e.base;
+        hops++;
+    }
+    return hops;
+}
+
+/** Drop lowest keys past SNAPSHOT_CAP, promoting any delta that would be orphaned. */
+function trimSnapshots(state) {
+    let keys = Object.keys(state.snapshots).map(Number).sort((a, b) => a - b);
+    while (keys.length > SNAPSHOT_CAP) {
+        const lo = keys.shift();
+        for (const kk of Object.keys(state.snapshots)) {
+            const e = state.snapshots[kk];
+            if (e && !e.kf && 'base' in e && e.base === lo) {
+                const full = readSnap(state, Number(kk));
+                if (full) state.snapshots[kk] = { kf: true, data: full };
+            }
+        }
+        delete state.snapshots[lo];
+    }
+}
 
 /**
  * Capture the PRE-turn state for message `index`. Write-once: a re-run of the
  * tracker on the same message keeps the original baseline, so re-processing
  * recomputes deltas from the same starting point instead of compounding them.
+ * Stored as a delta from the previous snapshot, with a full keyframe every
+ * KEYFRAME_EVERY captures.
  */
 export function snapshot(st, index) {
     if (!st || !Number.isInteger(index) || index < 0) { warn('snapshot: bad index', index); return; }
     if (!st.snapshots) st.snapshots = {};
     if (st.snapshots[index]) { vlog(`snapshot #${index} already exists — kept as baseline`); return; }
-    const snap = {};
-    for (const k of SNAPSHOT_KEYS) snap[k] = deepCopy(st[k]);
-    st.snapshots[index] = snap;
-    // Trim to the most recent SNAPSHOT_CAP indices.
-    const keys = Object.keys(st.snapshots).map(Number).sort((a, b) => a - b);
-    while (keys.length > SNAPSHOT_CAP) delete st.snapshots[keys.shift()];
-    vlog(`snapshot #${index} saved; snapshots: [${Object.keys(st.snapshots).join(',')}]`);
+
+    const cur = {};
+    for (const k of SNAPSHOT_KEYS) cur[k] = deepCopy(st[k]);
+
+    const prevKey = nearestSnapKey(st, index - 1);
+    const prevData = prevKey != null ? readSnap(st, prevKey) : null;
+
+    if (prevData == null || deltasSinceKeyframe(st, prevKey) + 1 >= KEYFRAME_EVERY) {
+        st.snapshots[index] = { kf: true, data: cur };
+    } else {
+        st.snapshots[index] = { base: prevKey, patch: diffJson(prevData, cur) };
+    }
+
+    trimSnapshots(st);
+    vlog(`snapshot #${index} saved (${st.snapshots[index].kf ? 'keyframe' : 'delta<-' + st.snapshots[index].base}); keys [${Object.keys(st.snapshots).join(',')}]`);
     save();
 }
 
 /**
  * Revert canonical state to just before message `index` influenced it.
  * Restores the nearest snapshot with key <= index, drops later snapshots and
- * any pending change sourced from message >= index.
- * @returns {{restored:boolean, usedKey:number|null, prunedPending:number, prunedSnaps:number}}
+ * any pending change / history sourced from message >= index.
  */
 export function restoreFrom(st, index) {
     const result = { restored: false, usedKey: null, prunedPending: 0, prunedSnaps: 0, prunedHistory: 0 };
     if (!st) return result;
     if (!st.snapshots || typeof st.snapshots !== 'object') st.snapshots = {};
 
-    const candidates = Object.keys(st.snapshots).map(Number).filter((k) => k <= index).sort((a, b) => b - a);
-    const useKey = candidates[0];
+    const useKey = nearestSnapKey(st, index);
     if (useKey != null) {
-        const snap = st.snapshots[useKey];
-        for (const k of SNAPSHOT_KEYS) if (snap && snap[k] != null) st[k] = deepCopy(snap[k]);
-        result.restored = true;
-        result.usedKey = useKey;
+        const data = readSnap(st, useKey);
+        if (data) {
+            for (const k of SNAPSHOT_KEYS) if (data[k] != null) st[k] = deepCopy(data[k]);
+            result.restored = true;
+            result.usedKey = useKey;
+        } else {
+            warn(`restoreFrom(${index}): could not reconstruct snapshot #${useKey}; state left as-is`);
+        }
     }
     for (const k of Object.keys(st.snapshots)) {
         if (Number(k) > index) { delete st.snapshots[k]; result.prunedSnaps++; }
@@ -249,7 +327,7 @@ export function restoreFrom(st, index) {
     result.prunedPending = before - st.pending.length;
     result.prunedHistory = pruneHistory(st, index);
 
-    vlog(`restoreFrom(${index}): all snapshot keys were [${Object.keys(st.snapshots).join(',')}], used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps / ${result.prunedHistory} history`);
+    vlog(`restoreFrom(${index}): used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps / ${result.prunedHistory} history`);
     save();
     return result;
 }
@@ -258,16 +336,10 @@ export function restoreFrom(st, index) {
 // Non-destructive snapshot read + per-swipe reconstruction
 // ---------------------------------------------------------------------------
 
-/** Deep copy of the nearest snapshot with key <= index, or null. No mutation. */
+/** Reconstructed {clock,world,userStats,characters} for the nearest snapshot key <= index, or null. */
 export function peekSnapshot(state, index) {
-    if (!state || !state.snapshots || typeof state.snapshots !== 'object') return null;
-    const key = Object.keys(state.snapshots).map(Number).filter((k) => k <= index).sort((a, b) => b - a)[0];
-    if (key == null) return null;
-    const snap = state.snapshots[key];
-    if (!snap) return null;
-    const out = {};
-    for (const k of SNAPSHOT_KEYS) if (snap[k] != null) out[k] = deepCopy(snap[k]);
-    return out;
+    const key = nearestSnapKey(state, index);
+    return key == null ? null : readSnap(state, key);
 }
 
 /**

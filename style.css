@@ -436,6 +436,21 @@ body:has(#wt-inline) #extensionTopBar {
     border-left: 2px solid var(--wt-accent);
 }
 
+.wt-char-grip {
+    cursor: grab;
+    opacity: 0.5;
+    padding: 0 0.15rem;
+    flex: 0 0 auto;
+}
+
+.wt-char-grip:hover {
+    opacity: 1;
+}
+
+.wt-char.wt-dragging {
+    opacity: 0.5;
+}
+
 .wt-char-you {
     font-weight: 600;
     font-size: 0.62rem;

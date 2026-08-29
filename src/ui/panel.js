@@ -6,7 +6,7 @@
 
 import { fieldRow } from './fields.js';
 import { displayValue, esc, iconFor } from './format.js';
-import { makeDraggable, makeResizable } from './drag.js';
+import { makeDraggable, makeResizable, makeSortable } from './drag.js';
 import { vlog } from '../log.js';
 
 const ROOT_ID = 'wt-root';
@@ -351,10 +351,12 @@ function buildDetailBody() {
 
         const members = groupMemberNames();
         const isPresent = (n) => state.characters[n].present !== false;
+        const byOrder = (a, b) => (state.characters[a].order ?? 1e9) - (state.characters[b].order ?? 1e9);
         const sortByPresence = (arr) => [
-            ...arr.filter(isPresent),
+            ...arr.filter(isPresent).sort(byOrder),
             ...arr.filter((n) => !isPresent(n))
-                .sort((a, b) => (state.characters[b].lastPresentTs || 0) - (state.characters[a].lastPresentTs || 0)),
+                .sort((a, b) => byOrder(a, b)
+                    || (state.characters[b].lastPresentTs || 0) - (state.characters[a].lastPresentTs || 0)),
         ];
         const buildCard = (name) => {
             const entry = state.characters[name];
@@ -362,7 +364,8 @@ function buildDetailBody() {
             const absent = !isPlayer && entry.present === false;
             const byNames = [...new Set([...members, ...names])].filter((n) => n !== name);
             if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) byNames.push(entry.updater);
-            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}${isPlayer ? ' wt-char-player' : ''}"><div class="wt-char-head">
+            const $c = $(`<div class="wt-char${absent ? ' wt-absent' : ''}${isPlayer ? ' wt-char-player' : ''}" data-name="${esc(name)}"${isPlayer ? '' : ' draggable="true"'}><div class="wt-char-head">
+                ${isPlayer ? '' : '<span class="wt-char-grip" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></span>'}
                 ${isPlayer ? '' : `<button class="wt-char-present" title="${absent ? 'Away — click to mark present' : 'Present — click to mark away'}"><i class="fa-solid ${absent ? 'fa-eye-slash' : 'fa-eye'}"></i></button>`}
                 <span class="wt-char-name">${esc(name)}${isPlayer ? ' <span class="wt-char-you">you</span>' : ''}</span>
                 ${isPlayer ? '' : `<select class="wt-updater" title="Who updates this character">
@@ -386,7 +389,16 @@ function buildDetailBody() {
         const otherMain = sortByPresence(names.filter((n) => isMain(n) && n !== pName));
         const mainNames = names.includes(pName) ? [pName, ...otherMain] : otherMain;
         const npcNames = sortByPresence(names.filter((n) => !isMain(n)));
-        for (const name of mainNames) $cs.append(buildCard(name));
+
+        const onReorder = () => {
+            const order = [...$cs[0].querySelectorAll('.wt-char')].map((el) => el.dataset.name).filter(Boolean);
+            handlers.onReorderCharacters?.(order);
+        };
+
+        const $mainList = $('<div class="wt-char-main-list"></div>');
+        for (const name of mainNames) $mainList.append(buildCard(name));
+        $cs.append($mainList);
+        makeSortable($mainList[0], { itemSelector: '.wt-char:not(.wt-char-player)', handleSelector: '.wt-char-grip', onDrop: onReorder });
 
         if (npcNames.length) {
             const collapsed = !!settings.npcCollapsed;
@@ -398,6 +410,7 @@ function buildDetailBody() {
             if (!collapsed) {
                 const $list = $g.find('.wt-npc-list');
                 for (const name of npcNames) $list.append(buildCard(name));
+                makeSortable($list[0], { itemSelector: '.wt-char', handleSelector: '.wt-char-grip', onDrop: onReorder });
             }
             $cs.append($g);
         }

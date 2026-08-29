@@ -213,6 +213,14 @@ function onSetPresent(name, present) {
     refresh();
 }
 
+function onReorderCharacters(names) {
+    const st = getState();
+    if (!st) return;
+    state.reorderCharacters(st, names);
+    vlog(`character order -> ${names.join(', ')}`);
+    refresh();
+}
+
 /**
  * Track every chat participant in one go. Group members (or the solo chat's
  * character) minus the narrator — but only when a narrator IS set; "(any turn)"
@@ -559,7 +567,7 @@ jQuery(async () => {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
-        onToggleFieldGroup, onSetPresent, onAddParticipants,
+        onToggleFieldGroup, onSetPresent, onAddParticipants, onReorderCharacters,
     } });
 
     buildSettingsDrawer();

@@ -292,7 +292,7 @@ export function ensureCharacter(state, name, schema) {
     const s = schema ?? defaultSchema();
     if (!state.characters[name]) {
         const template = isPlayerName(name) ? (s.player?.fields ?? []) : (s.character?.fields ?? []);
-        const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, fields: {} };
+        const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, order: Object.keys(state.characters).length, fields: {} };
         for (const f of template) {
             entry.fields[f.key] = {
                 value: f.default ?? '',
@@ -314,6 +314,20 @@ export function removeCharacter(state, name) {
         delete state.characters[name];
         save();
     }
+}
+
+/**
+ * Persist a manual display order for character cards. `orderedNames` is the
+ * full desired order; any tracked name missing from it is pushed to the end.
+ */
+export function reorderCharacters(state, orderedNames) {
+    if (!state || !Array.isArray(orderedNames)) return;
+    let tail = orderedNames.length;
+    for (const name of Object.keys(state.characters)) {
+        const i = orderedNames.indexOf(name);
+        state.characters[name].order = i >= 0 ? i : tail++;
+    }
+    save();
 }
 
 /**

@@ -120,13 +120,16 @@ export function buildResponseSchema(state, sec = {}) {
 }
 
 /**
- * A character is "in scope" this turn if its updater is the narrator, or if it
- * is 'self' and it authored the triggering message, or a specific name that
- * authored it. Others are read-only for this update.
+ * A character is "in scope" (writable) this turn based on its updater:
+ *   'narrator'  -> the narrator's turn (any turn if no narrator is set)
+ *   'self'      -> a turn this character authored
+ *   '<name>'    -> a turn that named character authored
+ * @param {string} authorName   who authored the triggering message
+ * @param {string} narratorName the designated narrator ('' = any turn)
  */
-export function inScope(entry, name, authorName) {
+export function inScope(entry, name, authorName, narratorName = '') {
     const u = entry?.updater || 'narrator';
-    if (u === 'narrator') return true;
+    if (u === 'narrator') return narratorName ? authorName === narratorName : true;
     if (!authorName) return false;
     if (u === 'self') return authorName === name;
     return authorName === u;
@@ -140,6 +143,7 @@ export function inScope(entry, name, authorName) {
  */
 export function buildTrackerPrompt(state, recent, opts = {}) {
     const { settings = {}, playerName, authorName } = opts;
+    const narratorName = settings.narratorName || '';
     const sys = settings.promptOverrides?.system || DEFAULT_SYSTEM;
     const cap = Number(settings.maxMessageChars) || 1500;
     const sec = settings.sections || {};
@@ -159,7 +163,7 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
 
     const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
-        const writable = names.filter((n) => inScope(state.characters[n], n, authorName));
+        const writable = names.filter((n) => inScope(state.characters[n], n, authorName, narratorName));
         const readonly = names.filter((n) => !writable.includes(n));
         L.push('');
         if (writable.length) L.push(`Report updates for these NPCs only: ${writable.join(', ')}.`);

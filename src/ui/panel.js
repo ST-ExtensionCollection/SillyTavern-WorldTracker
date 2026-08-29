@@ -76,6 +76,22 @@ function unpadChat() {
     document.getElementById(SPACER_ID)?.remove();
 }
 
+/** Character names in the current group chat (empty for a solo chat). */
+export function groupMemberNames(ctx) {
+    try {
+        const gid = ctx.groupId;
+        if (!gid) return [];
+        const group = (ctx.groups || []).find((g) => String(g.id) === String(gid));
+        if (!group) return [];
+        const chars = ctx.characters || [];
+        return (group.members || [])
+            .map((avatar) => chars.find((c) => c.avatar === avatar)?.name)
+            .filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
 /** True when a character/group chat is open. Nothing to track otherwise. */
 function chatActive() {
     try {
@@ -265,14 +281,21 @@ function buildDetailBody() {
     const names = sec.characters !== false ? Object.keys(state.characters) : [];
     if (names.length) {
         const $cs = $('<div class="wt-section"></div>').append('<div class="wt-section-head"><i class="fa-solid fa-users"></i> Characters</div>');
+        const members = groupMemberNames(cfg.context);
         for (const name of names) {
             const entry = state.characters[name];
+            // "By X" options = group members + other tracked characters + the
+            // current value (so a stale updater still shows), minus self.
+            const byNames = [...new Set([...members, ...names])].filter((n) => n !== name);
+            if (entry.updater && !['narrator', 'self'].includes(entry.updater) && !byNames.includes(entry.updater)) {
+                byNames.push(entry.updater);
+            }
             const $c = $(`<div class="wt-char"><div class="wt-char-head">
                 <span class="wt-char-name">${esc(name)}</span>
                 <select class="wt-updater" title="Who updates this character">
                     <option value="narrator"${entry.updater === 'narrator' ? ' selected' : ''}>Narrator</option>
                     <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only</option>
-                    ${names.filter((n) => n !== name).map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
+                    ${byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
                 </select>
                 <button class="wt-char-remove" title="Stop tracking ${esc(name)}"><i class="fa-solid fa-trash"></i></button>
             </div></div>`);

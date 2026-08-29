@@ -51,7 +51,7 @@ function fieldProposal(path, label, field, incoming, sourceMessageId) {
  * @returns {Array} proposals
  */
 export function diffToProposals(st, data, opts = {}) {
-    const { sourceMessageId = null, authorName = null, sections = {} } = opts;
+    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '' } = opts;
     const out = [];
     if (!data || typeof data !== 'object') return out;
 
@@ -107,7 +107,7 @@ export function diffToProposals(st, data, opts = {}) {
                 continue;
             }
             // Ownership: skip characters that aren't this turn's to update.
-            if (!inScope(entry, name, authorName)) continue;
+            if (!inScope(entry, name, authorName, narratorName)) continue;
             for (const [fk, v] of Object.entries(fields || {})) {
                 const f = entry.fields[fk];
                 if (!f || f.locked || v == null || sameValue(f, v)) continue;

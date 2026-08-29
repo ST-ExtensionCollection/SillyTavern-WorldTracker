@@ -163,7 +163,9 @@ async function onManualUpdate(opts = {}) {
             return;
         }
         log('parsed tracker data:', res.data);
-        ingestProposals(st, diffToProposals(st, res.data, { sourceMessageId: srcId, authorName, sections: settings.sections || {} }));
+        ingestProposals(st, diffToProposals(st, res.data, {
+            sourceMessageId: srcId, authorName, sections: settings.sections || {}, narratorName: settings.narratorName || '',
+        }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
         log('request error:', err);
@@ -270,14 +272,16 @@ function onDeclineAll() {
 }
 
 function onOpenSettings() {
-    openSettingsModal(ctx, settings, (newSchema, newSections) => {
+    openSettingsModal(ctx, settings, (newSchema, newSections, extras = {}) => {
         settings.schema = newSchema;
         settings.sections = newSections;
+        if ('narratorName' in extras) settings.narratorName = extras.narratorName;
         saveSettingsDebounced();
         const st = getState();
         if (st) state.applySchema(st, newSchema);
         log('schema updated:', newSchema.world.length, 'world,', newSchema.userStats.length, 'stats,',
-            (newSchema.character?.fields || []).length, 'char fields; sections', JSON.stringify(newSections));
+            (newSchema.character?.fields || []).length, 'char fields; sections', JSON.stringify(newSections),
+            'narrator', settings.narratorName || '(any)');
         refresh();
     }).catch((e) => { log('settings modal error', e); });
 }

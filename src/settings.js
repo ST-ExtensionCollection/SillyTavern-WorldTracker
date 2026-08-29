@@ -37,6 +37,9 @@ function defaultSettings() {
         bannerExpanded: false,
         // Which state groups are shown / tracked. User stats off by default.
         sections: { world: true, userStats: false, characters: true },
+        // The chat's narrator character. '' = any turn counts as the narrator's
+        // (characters with updater 'narrator' then update every turn).
+        narratorName: '',
         floatPos: { x: 80, y: 80 },
         floatSize: { w: 340, h: 420 },
         dockSide: 'right',          // 'left' | 'right'

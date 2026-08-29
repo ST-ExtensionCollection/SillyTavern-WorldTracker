@@ -5,6 +5,7 @@
 // schema + sections; the caller persists and re-seeds the current chat.
 
 import { defaultSchema } from '../schema.js';
+import { groupMemberNames } from './panel.js';
 
 const TYPES = ['text', 'number', 'enum'];
 const DEFAULT_SECTIONS = { world: true, userStats: false, characters: true };
@@ -15,7 +16,7 @@ function fieldRow(kind, f = {}) {
     const isStat = kind === 'stat';
     const type = f.type || (isStat ? 'number' : 'text');
     const $r = $(`
-        <div class="wt-cfg-row" data-kind="${kind}">
+        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(f.default ?? '')}">
             <input type="text" class="text_pole wt-cfg-key" placeholder="name" value="${esc(f.key)}">
             ${isStat ? '' : `<select class="text_pole wt-cfg-type">${TYPES.map((t) => `<option value="${t}"${t === type ? ' selected' : ''}>${t}</option>`).join('')}</select>`}
             ${isStat
@@ -72,11 +73,15 @@ function readRows($list, kind) {
         }
         const type = $r.find('.wt-cfg-type').val() || 'text';
         const extra = String($r.find('.wt-cfg-extra').val() || '').trim();
+        const prevDefault = $r.attr('data-default') || '';
         const f = { key, label: key, type, lockedByDefault: false, default: type === 'number' ? 0 : '' };
         if (type === 'number' && extra) f.unit = extra;
         if (type === 'enum') {
             f.options = extra.split(',').map((s) => s.trim()).filter(Boolean);
-            f.default = f.options[0] ?? '';
+            // Keep the previous default if it's still a valid option.
+            f.default = f.options.includes(prevDefault) ? prevDefault : (f.options[0] ?? '');
+        } else if (type === 'text' && prevDefault) {
+            f.default = prevDefault;
         }
         out.push(f);
     });
@@ -91,14 +96,30 @@ const SECTION_PILLS = [
 
 /**
  * @param {object} ctx       SillyTavern context (callGenericPopup, POPUP_TYPE, POPUP_RESULT)
- * @param {object} settings  live settings object (schema + sections)
- * @param {(schema, sections)=>void} onSave
+ * @param {object} settings  live settings object (schema + sections + narratorName)
+ * @param {(schema, sections, extras)=>void} onSave  extras = { narratorName }
  */
 export async function openSettingsModal(ctx, settings, onSave) {
     const s = settings.schema;
     const sec0 = { ...DEFAULT_SECTIONS, ...(settings.sections || {}) };
 
     const $c = $('<div class="wt-cfg"></div>');
+
+    // --- narrator character ---
+    const members = groupMemberNames(ctx);
+    const curNarr = settings.narratorName || '';
+    const narrOpts = [...new Set(members.concat(curNarr && !members.includes(curNarr) ? [curNarr] : []))];
+    const $narr = $(`
+        <div class="wt-cfg-sec">
+            <div class="wt-cfg-sec-head">Narrator character</div>
+            <select class="text_pole wt-narr">
+                <option value=""${curNarr ? '' : ' selected'}>(any turn)</option>
+                ${narrOpts.map((n) => `<option value="${esc(n)}"${n === curNarr ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+            </select>
+            <small class="notes">Characters set to updater "Narrator" update only on this character's turns. "(any turn)" = update every turn.</small>
+        </div>
+    `);
+    $c.append($narr);
 
     // --- sections as toggle pills ---
     const $pills = $('<div class="wt-cfg-pills"></div>');
@@ -170,5 +191,5 @@ export async function openSettingsModal(ctx, settings, onSave) {
     };
     const pillOn = (k) => $pills.find(`.wt-pill[data-key="${k}"]`).hasClass('wt-pill-on');
     const newSections = { world: pillOn('world'), userStats: pillOn('userStats'), characters: pillOn('characters') };
-    onSave(newSchema, newSections);
+    onSave(newSchema, newSections, { narratorName: String($narr.find('.wt-narr').val() || '') });
 }

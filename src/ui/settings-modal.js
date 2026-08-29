@@ -6,6 +6,7 @@
 
 import { defaultSchema, normGroup } from '../schema.js';
 import { groupMemberNames } from './panel.js';
+import { makeSortable } from './drag.js';
 import * as profiles from '../profiles.js';
 
 const TYPES = ['text', 'number', 'enum'];
@@ -38,7 +39,8 @@ function fieldRow(kind, f = {}) {
     const isStat = kind === 'stat';
     const type = f.type || (isStat ? 'number' : 'text');
     const $r = $(`
-        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(type === 'text' ? (f.default ?? '') : '')}">
+        <div class="wt-cfg-row" data-kind="${kind}" data-default="${esc(type === 'text' ? (f.default ?? '') : '')}" draggable="true">
+            <span class="wt-cfg-grip" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></span>
             <input type="text" class="text_pole wt-cfg-key" placeholder="name" value="${esc(f.key)}">
             ${isStat ? '' : `<select class="text_pole wt-cfg-type">${TYPES.map((t) => `<option value="${t}"${t === type ? ' selected' : ''}>${t}</option>`).join('')}</select>`}
             ${isStat
@@ -94,20 +96,6 @@ async function openEnumEditor(options, defaultVal) {
             markDefault();
         });
         $o.find('.wt-enum-del').on('click', () => { $o.remove(); markDefault(); });
-        $o.on('dragstart', (e) => {
-            if (!$(e.target).closest('.wt-enum-grip').length) { e.preventDefault(); return; }
-            $o.addClass('wt-dragging');
-            e.originalEvent.dataTransfer.effectAllowed = 'move';
-        });
-        $o.on('dragend', () => $o.removeClass('wt-dragging'));
-        $o.on('dragover', (e) => {
-            e.preventDefault();
-            const $drag = $list.find('.wt-dragging');
-            if (!$drag.length || $drag[0] === $o[0]) return;
-            const r = $o[0].getBoundingClientRect();
-            const after = (e.originalEvent.clientY - r.top) > r.height / 2;
-            $o[after ? 'after' : 'before']($drag);
-        });
         return $o;
     };
     const markDefault = () => {
@@ -118,6 +106,7 @@ async function openEnumEditor(options, defaultVal) {
         });
     };
     for (const o of options) $list.append(optRow(o));
+    makeSortable($list[0], { itemSelector: '.wt-enum-opt', handleSelector: '.wt-enum-grip', onDrop() {} });
     markDefault();
 
     const $add = $('<button class="menu_button"><i class="fa-solid fa-plus"></i> Add option</button>');
@@ -169,6 +158,7 @@ function listSection(title, kind, list, collapsed) {
     const $list = $sec.find('.wt-cfg-list');
     const fill = (arr) => { $list.empty(); for (const f of arr) $list.append(fieldRow(kind, f)); };
     fill(list);
+    makeSortable($list[0], { itemSelector: '.wt-cfg-row', handleSelector: '.wt-cfg-grip', onDrop() {} });
     $sec.find('.wt-cfg-add').on('click', () => $list.append(fieldRow(kind, {})));
     $sec.find('.wt-cfg-reset').on('click', () => {
         const ds = defaultSchema();

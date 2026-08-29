@@ -929,6 +929,21 @@ body:has(#wt-inline) #extensionTopBar {
     align-items: center;
 }
 
+.wt-cfg-row.wt-dragging {
+    opacity: 0.5;
+}
+
+.wt-cfg-grip {
+    cursor: grab;
+    opacity: 0.6;
+    padding: 0 0.2rem;
+    flex: 0 0 auto;
+}
+
+.wt-cfg-grip:hover {
+    opacity: 1;
+}
+
 .wt-cfg-row .wt-cfg-key {
     flex: 1 1 8rem;
 }

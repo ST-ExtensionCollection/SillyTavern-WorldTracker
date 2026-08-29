@@ -64,6 +64,58 @@ export function makeDraggable(element, handle, ns, onEnd, excludeSelector) {
 }
 
 /**
+ * Make the direct children of `listEl` matching `itemSelector` reorderable by
+ * HTML5 drag-and-drop, started only from a `handleSelector` grip. Mouse only
+ * (no touch), matching the enum-option editor. Items must already carry
+ * `draggable="true"`. `onDrop()` fires after a reorder (read DOM order there).
+ * Returns a cleanup function.
+ */
+export function makeSortable(listEl, { itemSelector, handleSelector, onDrop } = {}) {
+    const list = listEl && listEl.nodeType ? listEl : (listEl && listEl[0]);
+    if (!list || !itemSelector || !handleSelector) return () => {};
+
+    let dragEl = null;
+
+    const onDragStart = (e) => {
+        const item = e.target.closest(itemSelector);
+        if (!item || !list.contains(item) || !e.target.closest(handleSelector)) {
+            e.preventDefault();
+            return;
+        }
+        dragEl = item;
+        item.classList.add('wt-dragging');
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    };
+    const onDragOver = (e) => {
+        if (!dragEl) return;
+        const over = e.target.closest(itemSelector);
+        if (!over || !list.contains(over)) return;
+        e.preventDefault();
+        if (over === dragEl) return;
+        const r = over.getBoundingClientRect();
+        const after = (e.clientY - r.top) > r.height / 2;
+        over.parentNode.insertBefore(dragEl, after ? over.nextSibling : over);
+    };
+    const finish = () => {
+        if (!dragEl) return;
+        dragEl.classList.remove('wt-dragging');
+        dragEl = null;
+        if (onDrop) onDrop();
+    };
+
+    list.addEventListener('dragstart', onDragStart);
+    list.addEventListener('dragover', onDragOver);
+    list.addEventListener('drop', (e) => { e.preventDefault(); finish(); });
+    list.addEventListener('dragend', finish);
+
+    return () => {
+        list.removeEventListener('dragstart', onDragStart);
+        list.removeEventListener('dragover', onDragOver);
+        list.removeEventListener('dragend', finish);
+    };
+}
+
+/**
  * Add a bottom-right resize grip to `element`. Calls onEnd({ w, h }) on release.
  */
 export function makeResizable(element, ns, onEnd, min = { w: 240, h: 160 }) {

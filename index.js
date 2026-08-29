@@ -486,12 +486,16 @@ jQuery(async () => {
     });
 
     // --- swipe / regen / delete safety: revert to the pre-query snapshot ---
-    const onRevert = (id, why) => {
+    // MESSAGE_SWIPED gives the message index; MESSAGE_DELETED gives the NEW
+    // chat.length (i.e. the index of the removed tail message).
+    const onRevert = (rawId, why) => {
+        const id = Number(rawId);
+        log(`revert event: ${why}, rawId=${JSON.stringify(rawId)} -> ${id}`);
         const st = getState();
-        if (!st || !Number.isInteger(id)) return;
+        if (!st || !Number.isFinite(id)) { log('revert: no state or bad id'); return; }
         stopUpdate('revert');
-        const restored = state.restoreFrom(st, id);
-        log(`revert @${id} (${why}) -> ${restored ? 'snapshot restored' : 'no snapshot, pending pruned'}`);
+        const r = state.restoreFrom(st, id);
+        log(`revert @${id} (${why}): restored=${r.restored} usedKey=${r.usedKey} pruned=${r.prunedPending} pending`);
         refresh();
     };
     eventSource.on(event_types.MESSAGE_SWIPED, (id) => onRevert(id, 'swiped'));

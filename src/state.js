@@ -147,7 +147,7 @@ const SNAPSHOT_KEYS = ['clock', 'world', 'userStats', 'characters'];
 
 /** Capture the pre-query state for message `index` (idempotent per index). */
 export function snapshot(st, index) {
-    if (!st || !Number.isInteger(index) || index < 0) return;
+    if (!st || !Number.isInteger(index) || index < 0) { warn('snapshot: bad index', index); return; }
     if (!st.snapshots) st.snapshots = {};
     const snap = {};
     for (const k of SNAPSHOT_KEYS) snap[k] = deepCopy(st[k]);
@@ -155,28 +155,39 @@ export function snapshot(st, index) {
     // Trim to the most recent SNAPSHOT_CAP indices.
     const keys = Object.keys(st.snapshots).map(Number).sort((a, b) => a - b);
     while (keys.length > SNAPSHOT_CAP) delete st.snapshots[keys.shift()];
+    log(`snapshot #${index} saved; snapshots: [${Object.keys(st.snapshots).join(',')}]`);
     save();
 }
 
 /**
  * Revert canonical state to just before message `index` influenced it.
  * Restores the nearest snapshot with key <= index, drops later snapshots and
- * any pending change sourced from message >= index. Returns true if restored.
+ * any pending change sourced from message >= index.
+ * @returns {{restored:boolean, usedKey:number|null, prunedPending:number, prunedSnaps:number}}
  */
 export function restoreFrom(st, index) {
-    if (!st || !st.snapshots) return false;
-    const keys = Object.keys(st.snapshots).map(Number).filter((k) => k <= index).sort((a, b) => b - a);
-    const useKey = keys[0];
-    let restored = false;
+    const result = { restored: false, usedKey: null, prunedPending: 0, prunedSnaps: 0 };
+    if (!st) return result;
+    if (!st.snapshots || typeof st.snapshots !== 'object') st.snapshots = {};
+
+    const candidates = Object.keys(st.snapshots).map(Number).filter((k) => k <= index).sort((a, b) => b - a);
+    const useKey = candidates[0];
     if (useKey != null) {
         const snap = st.snapshots[useKey];
-        for (const k of SNAPSHOT_KEYS) if (snap[k] != null) st[k] = deepCopy(snap[k]);
-        restored = true;
+        for (const k of SNAPSHOT_KEYS) if (snap && snap[k] != null) st[k] = deepCopy(snap[k]);
+        result.restored = true;
+        result.usedKey = useKey;
     }
-    for (const k of Object.keys(st.snapshots)) if (Number(k) > index) delete st.snapshots[k];
+    for (const k of Object.keys(st.snapshots)) {
+        if (Number(k) > index) { delete st.snapshots[k]; result.prunedSnaps++; }
+    }
+    const before = (st.pending || []).length;
     st.pending = (st.pending || []).filter((p) => !(Number.isInteger(p.sourceMessageId) && p.sourceMessageId >= index));
+    result.prunedPending = before - st.pending.length;
+
+    log(`restoreFrom(${index}): all snapshot keys were [${Object.keys(st.snapshots).join(',')}], used #${useKey ?? 'none'}, pruned ${result.prunedPending} pending / ${result.prunedSnaps} snaps`);
     save();
-    return restored;
+    return result;
 }
 
 // ---------------------------------------------------------------------------

@@ -139,8 +139,8 @@ The **gear** button on the panel opens the schema editor:
   **User stats are off by default** (like RPG Companion); flip the pill to get
   Health/Energy back.
 - add / remove / rename fields, pick a type (`text` / `number` / `enum`), set a
-  unit / enum options / max. An enum's default is kept across edits as long as
-  it stays a valid option.
+  unit (number) or max. For `enum`, the pencil button opens an editor: drag to
+  reorder, rename, star one as the default, delete, or import from a comma list.
 - edit the clock display format and start time.
 - reset buttons per list, plus *Restore all defaults*.
 

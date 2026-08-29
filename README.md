@@ -142,10 +142,26 @@ The **gear** button on the panel opens the schema editor:
   unit (number) or max. For `enum`, the pencil button opens an editor: drag to
   reorder, rename, star one as the default, delete, or import from a comma list.
 - edit the clock display format and start time.
-- reset buttons per list, plus *Restore all defaults*.
+- reset buttons per list, plus *Restore all defaults* (rebuilds the editor only,
+  not other profiles).
 
-The schema is **global** (shared by every chat). Saving it re‑shapes the current
-chat's data — new fields added, removed fields dropped, existing values kept.
+Saving re‑shapes the current chat's data — new fields added, removed fields
+dropped, existing values kept.
+
+### Profiles
+
+The gear dialog's **Profile** bar stores named copies of everything below it
+(schema + section toggles + narrator):
+
+- dropdown of profiles (the default is marked ★);
+- **New** (from built‑in defaults) / **Save** (into the selected profile) /
+  **Save as…** / **Rename** / **Delete**;
+- **Use this profile for the current chat / group** — binds it to that group
+  (or character); it's auto‑applied whenever you open that chat;
+- **Default profile** — applied to any chat with no binding.
+
+Switching or creating a profile applies it immediately. On chat change the
+extension picks binding → default → whatever's active.
 
 ### Swipe / regenerate / delete safety
 
@@ -237,27 +253,22 @@ Things worth fixing or at least being aware of:
 3. **No per‑swipe tracker state.** Swiping left/right between already‑generated
    swipes reverts to "before this message ran", losing whatever each swipe's
    own tracker pass produced.
-4. **Schema is global.** You can't run a different field set in a sci‑fi chat
-   vs a medieval one. Per‑chat or per‑character schema presets would fix this.
-5. **`autoApproveFields` has no UI.** Only the all‑or‑nothing *Auto‑approve*
+4. **`autoApproveFields` has no UI.** Only the all‑or‑nothing *Auto‑approve*
    toggle is exposed, though the per‑path list is honored if set by hand.
-6. **Snapshots are full‑state JSON copies** (up to 40) stored in chat metadata —
+5. **Snapshots are full‑state JSON copies** (up to 40) stored in chat metadata —
    noticeable bloat on long chats with many fields/characters. Deltas or a
    smaller cap would help.
-7. **Structured output is `strict: false`** with no `additionalProperties`
+6. **Structured output is `strict: false`** with no `additionalProperties`
    constraint — some backends ignore the schema; the tolerant parser is the
    real safety net. Turn it off if a backend errors on `json_schema`.
-8. **Legacy empty `intervalPresets` doesn't self‑heal.** If you ran a very
-   early build and never touched the schema editor, the pace presets may be
-   missing — use *Restore all defaults* in the gear dialog.
-9. **`/wt-char add`** doesn't validate the name against chat participants, and
+7. **`/wt-char add`** doesn't validate the name against chat participants, and
    there's no auto‑discovery of group members (the model proposing a new
    character partly covers this).
-10. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
-    m.content`) — harmless, should be cleaned.
-11. **No timezone handling** in `clock.js` — in‑world time is fictional so it
-    doesn't matter, but adding elapsed time across a real DST boundary could
-    shift an hour.
+8. **Dead ternary** in `request.js` (`m.role === 'system' ? m.content :
+   m.content`) — harmless, should be cleaned.
+9. **No timezone handling** in `clock.js` — in‑world time is fictional so it
+   doesn't matter, but adding elapsed time across a real DST boundary could
+   shift an hour.
 
 ---
 

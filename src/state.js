@@ -536,12 +536,17 @@ export function applyChange(state, ch, schema) {
 // Characters
 // ---------------------------------------------------------------------------
 
-/** Ensure a character entry exists, seeded from the schema template. */
-export function ensureCharacter(state, name, schema) {
+/**
+ * Ensure a character entry exists, seeded from the schema template.
+ * `opts.auto` marks it as auto-added (persona auto-track / bulk-add /
+ * model-introduced) so an untouched one can be pruned on chat change.
+ */
+export function ensureCharacter(state, name, schema, opts = {}) {
     const s = schema ?? defaultSchema();
     if (!state.characters[name]) {
         const template = isPlayerName(name) ? (s.player?.fields ?? []) : (s.character?.fields ?? []);
         const entry = { updater: s.character?.defaultUpdater ?? UPDATER_NARRATOR, present: true, order: Object.keys(state.characters).length, fields: {}, rels: {} };
+        if (opts.auto) entry.auto = true;
         for (const f of template) {
             entry.fields[f.key] = {
                 value: f.default ?? '',
@@ -609,8 +614,107 @@ export function ensurePlayerTracked(state, schema) {
     if (!state) return false;
     const name = personaName();
     if (!name || state.characters[name]) return false;
-    ensureCharacter(state, name, schema);
+    ensureCharacter(state, name, schema, { auto: true });
     return true;
+}
+
+/** True when a character card holds real data (so it must not be auto-pruned). */
+export function isCardTouched(state, name, schema) {
+    const e = state?.characters?.[name];
+    if (!e) return false;
+    if (e.present === false) return true;
+    if (e.rels && Object.keys(e.rels).length) return true;
+    if (e.updater && e.updater !== UPDATER_NARRATOR) return true;
+
+    const s = schema ?? defaultSchema();
+    const tmpl = isPlayerName(name) ? (s.player?.fields ?? []) : (s.character?.fields ?? []);
+    const defs = {};
+    for (const f of tmpl) defs[f.key] = f.default ?? '';
+    for (const [k, f] of Object.entries(e.fields || {})) {
+        if (f.value != null && f.value !== '' && String(f.value) !== String(defs[k] ?? '')) return true;
+    }
+
+    const prefix = `characters.${name}.`;
+    const hit = (p) => p === `characters.${name}` || (typeof p === 'string' && p.startsWith(prefix));
+    for (const r of state.history || []) {
+        for (const ch of r.changes || []) if (hit(ch.path)) return true;
+    }
+    for (const p of state.pending || []) if (hit(p.path)) return true;
+    return false;
+}
+
+/**
+ * Remove every auto-added card that still has no real data and isn't in
+ * `keepNames`. Returns how many were dropped.
+ */
+export function pruneAutoCards(state, keepNames, schema) {
+    if (!state || !state.characters) return 0;
+    const keep = keepNames instanceof Set ? keepNames : new Set(keepNames || []);
+    let removed = 0;
+    for (const name of Object.keys(state.characters)) {
+        const e = state.characters[name];
+        if (e && e.auto && !keep.has(name) && !isCardTouched(state, name, schema)) {
+            delete state.characters[name];
+            for (const other of Object.values(state.characters)) {
+                if (other.rels && name in other.rels) delete other.rels[name];
+            }
+            removed++;
+        }
+    }
+    if (removed) save();
+    return removed;
+}
+
+/**
+ * Rename a tracked character everywhere it is referenced in LIVE state
+ * (characters key, other cards' updater + rels, pending, history). Snapshots
+ * are left as-is — reverting past a rename restores the old name.
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function renameCharacter(state, oldName, newNameRaw) {
+    const newName = String(newNameRaw ?? '').trim();
+    if (!state || !state.characters) return { ok: false, reason: 'no state' };
+    if (!newName) return { ok: false, reason: 'name is empty' };
+    if (newName === oldName) return { ok: false, reason: 'same name' };
+    if (!state.characters[oldName]) return { ok: false, reason: `"${oldName}" is not tracked` };
+    if (state.characters[newName]) return { ok: false, reason: `"${newName}" is already tracked` };
+
+    // move the entry, preserving key order
+    const rebuilt = {};
+    for (const [k, v] of Object.entries(state.characters)) rebuilt[k === oldName ? newName : k] = v;
+    state.characters = rebuilt;
+
+    // other cards' references
+    for (const [n, e] of Object.entries(state.characters)) {
+        if (n === newName) continue;
+        if (e.updater === oldName) e.updater = newName;
+        if (e.rels && oldName in e.rels) {
+            e.rels[newName] = e.rels[oldName];
+            delete e.rels[oldName];
+        }
+    }
+
+    const oldExact = `characters.${oldName}`;
+    const oldPrefix = `characters.${oldName}.`;
+    const rewrite = (p) => {
+        if (p === oldExact) return `characters.${newName}`;
+        if (typeof p === 'string' && p.startsWith(oldPrefix)) return `characters.${newName}.` + p.slice(oldPrefix.length);
+        return p;
+    };
+    for (const p of state.pending || []) {
+        const np = rewrite(p.path);
+        if (np !== p.path) { p.path = np; p.label = labelFor(np); }
+    }
+    for (const r of state.history || []) {
+        for (const ch of r.changes || []) {
+            const np = rewrite(ch.path);
+            if (np !== ch.path) { ch.path = np; ch.label = labelFor(np); }
+            if (ch.kind === 'new-character' && ch.rawAfter && ch.rawAfter.name === oldName) ch.rawAfter.name = newName;
+        }
+    }
+
+    save();
+    return { ok: true };
 }
 
 /**

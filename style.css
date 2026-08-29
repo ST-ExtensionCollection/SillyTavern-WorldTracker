@@ -613,6 +613,46 @@ body:has(#wt-inline) #extensionTopBar {
     gap: 0.2rem;
 }
 
+/* Collapsed float: header only. */
+.wt-float.wt-collapsed {
+    height: auto !important;
+    min-height: 0;
+}
+
+.wt-float.wt-collapsed .wt-resize-grip {
+    display: none;
+}
+
+/* Collapsed dock: thin edge rail, header rotated to a spine. */
+.wt-dock.wt-collapsed {
+    width: 2.2rem;
+    min-width: 2.2rem;
+}
+
+.wt-dock.wt-collapsed .wt-dock-head {
+    flex-direction: column;
+    height: 100%;
+    padding: 0.4rem 0;
+    gap: 0.4rem;
+    border-bottom: none;
+}
+
+.wt-dock.wt-collapsed .wt-dock-head > span {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    opacity: 0.7;
+    font-size: 0.75rem;
+}
+
+.wt-dock.wt-collapsed .wt-toolbar-wrap {
+    flex-direction: column;
+}
+
+/* In the collapsed dock, keep only the expand chevron. */
+.wt-dock.wt-collapsed .wt-toolbar-wrap > :not(.wt-collapse-btn) {
+    display: none;
+}
+
 /* ---------------- Dock ---------------- */
 
 .wt-dock {

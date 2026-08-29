@@ -36,6 +36,7 @@ function defaultSettings() {
         floatPos: { x: 80, y: 80 },
         floatSize: { w: 340, h: 420 },
         dockSide: 'right',          // 'left' | 'right'
+        panelCollapsed: false,      // roll-up for float / dock modes
         showLockIcons: true,
 
         // --- injection into the main chat ---

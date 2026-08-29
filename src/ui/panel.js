@@ -39,7 +39,7 @@ export function destroyPanel() {
         resizeHandler = null;
     }
     unpadChat();
-    $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right');
+    $('body').removeClass('wt-has-dock wt-dock-left wt-dock-right wt-dock-collapsed');
 }
 
 const SPACER_ID = 'wt-chat-spacer';
@@ -139,7 +139,8 @@ export function renderPanel() {
     if (!cfg) return;
     const { settings } = cfg;
     destroyPanel();
-    if (settings.enabled) {
+    // Nothing to track outside a chat — no panel in any mode.
+    if (settings.enabled && chatActive()) {
         let mode = settings.uiMode || 'banner';
         // Free-floating / side-rail panels are unusable on a narrow screen.
         if ((mode === 'float' || mode === 'dock') && window.innerWidth <= NARROW) mode = 'banner';
@@ -395,37 +396,50 @@ function chip(path, label, value, locked) {
 // Float / Dock  (narrow-screen fallback is handled in renderPanel)
 // ---------------------------------------------------------------------------
 
+function collapseBtn() {
+    const collapsed = !!cfg.settings.panelCollapsed;
+    const $b = $(`<button class="wt-btn wt-collapse-btn" title="${collapsed ? 'Expand' : 'Collapse'}"><i class="fa-solid ${collapsed ? 'fa-chevron-down' : 'fa-chevron-up'}"></i></button>`);
+    $b.on('click', () => cfg.handlers.onCollapse?.(!collapsed));
+    return $b;
+}
+
 function renderFloat() {
     const { settings, handlers } = cfg;
+    const collapsed = !!settings.panelCollapsed;
     const p = settings.floatPos || { x: 80, y: 80 };
     const s = settings.floatSize || { w: 340, h: 420 };
     const x = Math.max(0, Math.min(p.x, window.innerWidth - 120));
     const y = Math.max(0, Math.min(p.y, window.innerHeight - 60));
-    const $root = $(`<div id="${ROOT_ID}" class="wt-float" style="left:${x}px;top:${y}px;width:${s.w}px;height:${s.h}px"></div>`);
-    const $head = $('<div class="wt-float-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>').append(buildToolbar());
+    const hStyle = collapsed ? '' : `height:${s.h}px;`;
+    const $root = $(`<div id="${ROOT_ID}" class="wt-float${collapsed ? ' wt-collapsed' : ''}" style="left:${x}px;top:${y}px;width:${s.w}px;${hStyle}"></div>`);
+    const $head = $('<div class="wt-float-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>')
+        .append($('<div class="wt-toolbar-wrap"></div>').append(collapseBtn()).append(buildToolbar()));
     $root.append($head);
-    $root.append($('<div class="wt-float-body"></div>').append(buildDetailBody()));
+    if (!collapsed) $root.append($('<div class="wt-float-body"></div>').append(buildDetailBody()));
     $('body').append($root);
 
     makeDraggable($root[0], $head[0], 'wtFloat', ({ x: nx, y: ny }) => {
         settings.floatPos = { x: nx, y: ny };
         handlers.onPersistLayout?.();
-    }, '.wt-toolbar');
-    makeResizable($root[0], 'wtFloat', ({ w, h }) => {
-        settings.floatSize = { w, h };
-        handlers.onPersistLayout?.();
-    });
+    }, '.wt-toolbar-wrap');
+    if (!collapsed) {
+        makeResizable($root[0], 'wtFloat', ({ w, h }) => {
+            settings.floatSize = { w, h };
+            handlers.onPersistLayout?.();
+        });
+    }
 }
 
 function renderDock() {
     const { settings } = cfg;
+    const collapsed = !!settings.panelCollapsed;
     const side = settings.dockSide === 'left' ? 'left' : 'right';
-    const $root = $(`<div id="${ROOT_ID}" class="wt-dock wt-dock-${side}"></div>`);
+    const $root = $(`<div id="${ROOT_ID}" class="wt-dock wt-dock-${side}${collapsed ? ' wt-collapsed' : ''}"></div>`);
     const $head = $(`<div class="wt-dock-head"><span><i class="fa-solid fa-compass"></i> WorldTracker</span></div>`);
     const $flip = $(`<button class="wt-btn wt-dock-flip" title="Dock to the other side"><i class="fa-solid fa-left-right"></i></button>`);
     $flip.on('click', () => cfg.handlers.onDockSide?.(side === 'left' ? 'right' : 'left'));
-    $head.append($('<div class="wt-toolbar-wrap"></div>').append($flip).append(buildToolbar()));
+    $head.append($('<div class="wt-toolbar-wrap"></div>').append(collapseBtn()).append($flip).append(buildToolbar()));
     $root.append($head);
-    $root.append($('<div class="wt-dock-body"></div>').append(buildDetailBody()));
-    $('body').append($root).addClass(`wt-has-dock wt-dock-${side}`);
+    if (!collapsed) $root.append($('<div class="wt-dock-body"></div>').append(buildDetailBody()));
+    $('body').append($root).addClass(`wt-has-dock wt-dock-${side}${collapsed ? ' wt-dock-collapsed' : ''}`);
 }

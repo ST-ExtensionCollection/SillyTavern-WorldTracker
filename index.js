@@ -96,6 +96,12 @@ function onDockSide(side) {
     refresh();
 }
 
+function onCollapse(v) {
+    settings.panelCollapsed = !!v;
+    saveSettingsDebounced();
+    refresh();
+}
+
 let updateJob = null;
 
 /** ⟳ button: start an update, or stop the running one. */
@@ -453,7 +459,7 @@ jQuery(async () => {
     initPanel({ context: ctx, settings, getState, handlers: {
         onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
-        onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide,
+        onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse,
     } });
 
     buildSettingsDrawer();

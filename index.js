@@ -5,7 +5,7 @@ import { loadSettings, MODULE_NAME } from './src/settings.js';
 import * as state from './src/state.js';
 import * as clockUtil from './src/clock.js';
 import { log, vlog, setVerbose } from './src/log.js';
-import { buildTrackerPrompt, buildResponseSchema } from './src/prompt.js';
+import { buildTrackerPrompt, buildResponseSchema, inScope } from './src/prompt.js';
 import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
 import { diffToProposals, applyProposal } from './src/merge.js';
@@ -175,12 +175,23 @@ async function onManualUpdate(opts = {}) {
         ? opts.sourceMessageId
         : Math.max(0, chat.length - 1);
     const srcMsg = chat[srcId];
-    const authorName = srcMsg && !srcMsg.is_user ? srcMsg.name : null;
     // Context window ends AT the source message — never leak messages that come
     // after it (e.g. when re-rolling an older reply).
     const hi = Math.min(srcId, chat.length - 1);
     const lo = Math.max(0, hi - n + 1);
     const recent = chat.slice(lo, hi + 1).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
+
+    // Who "owns" this turn for self / by-name updater scoping. The source
+    // message's author when it's a character; otherwise (a user message
+    // triggered the pass) the most recent character speaker in the window — so
+    // in a solo chat "self only" still updates every turn.
+    const loose = (nm) => Object.keys(st.characters).find((k) => k.trim().toLowerCase() === String(nm ?? '').trim().toLowerCase());
+    let authorName = srcMsg && !srcMsg.is_user ? srcMsg.name : null;
+    if (!authorName || !loose(authorName)) {
+        for (let i = hi; i >= lo; i--) {
+            if (chat[i] && !chat[i].is_user && loose(chat[i].name)) { authorName = chat[i].name; break; }
+        }
+    }
     const firstTurn = srcId === 0;
 
     // Re-processing a message (pressing the arrows again) must recompute the
@@ -201,6 +212,7 @@ async function onManualUpdate(opts = {}) {
     updateJob = job;
     setBusy(true);
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
+    vlog('scope:', Object.keys(st.characters).map((k) => `${k}[${st.characters[k].updater}]=${inScope(st.characters[k], k, authorName, settings.narratorName || '', c.name1 || '') ? 'W' : 'ro'}`).join(' '));
 
     try {
         const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn) : null;

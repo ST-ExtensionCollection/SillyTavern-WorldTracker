@@ -145,13 +145,15 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false) {
  * @param {string} playerName   the persona name — a character sharing it is
  *                              always writable (the player's own appearance)
  */
+const nameEq = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
 export function inScope(entry, name, authorName, narratorName = '', playerName = '') {
     if (playerName && name === playerName) return true;
     const u = entry?.updater || 'narrator';
-    if (u === 'narrator') return narratorName ? authorName === narratorName : true;
+    if (u === 'narrator') return narratorName ? nameEq(authorName, narratorName) : true;
     if (!authorName) return false;
-    if (u === 'self') return authorName === name;
-    return authorName === u;
+    if (u === 'self') return nameEq(authorName, name);
+    return nameEq(authorName, u);
 }
 
 /**

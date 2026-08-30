@@ -27,8 +27,19 @@ function cleanMessage(mes, cap) {
     return s;
 }
 
+/** Character names writable this turn (self / by-name / narrator scoping). */
+export function writableNames(state, authorName, narratorName = '', playerName = '') {
+    return Object.keys(state?.characters || {}).filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
+}
+
+function charNameList(state, sec, charNames) {
+    let names = sec.characters !== false ? Object.keys(state.characters) : [];
+    if (Array.isArray(charNames)) names = names.filter((n) => charNames.includes(n));
+    return names;
+}
+
 /** The object we want back, pre-filled with the current real values. */
-function currentAsJson(state, sec = {}, firstTurn = false) {
+function currentAsJson(state, sec = {}, firstTurn = false, charNames = null) {
     const o = {};
     if (state.clock && !state.clock.locked) {
         o.clock = firstTurn
@@ -43,7 +54,7 @@ function currentAsJson(state, sec = {}, firstTurn = false) {
         o.userStats = {};
         for (const [k, f] of Object.entries(state.userStats)) o.userStats[k] = f.value;
     }
-    const names = sec.characters !== false ? Object.keys(state.characters) : [];
+    const names = charNameList(state, sec, charNames);
     if (names.length) {
         o.characters = {};
         for (const name of names) {
@@ -59,7 +70,7 @@ function currentAsJson(state, sec = {}, firstTurn = false) {
 }
 
 /** Human notes about constraints that don't fit in the JSON. */
-function constraintNotes(state, sec = {}, firstTurn = false) {
+function constraintNotes(state, sec = {}, firstTurn = false, charNames = null) {
     const notes = [];
     if (state.clock && !state.clock.locked && firstTurn) {
         notes.push(`- clock.datetime = the scene's in-world date/time as "YYYY-MM-DD HH:mm". If the opening message states or clearly implies one (a year, a season, a weekday, "at dawn", etc.) set it; otherwise copy ${JSON.stringify(format(state.clock.iso, 'yyyy-MM-dd HH:mm'))} unchanged.`);
@@ -85,8 +96,8 @@ function constraintNotes(state, sec = {}, firstTurn = false) {
     if (Object.values(state.characters).some((c) => c.rels && Object.keys(c.rels).length)) {
         notes.push(`- characters.<name>.relationships: only the entries already shown, values one of ${RELATIONSHIP_OPTIONS.join(' / ')}. Change one ONLY when the scene clearly shifts that bond; never add new pairs.`);
     }
-    for (const [name, c] of Object.entries(state.characters)) {
-        for (const [fk, ff] of Object.entries(c.fields)) {
+    for (const name of charNameList(state, sec, charNames)) {
+        for (const [fk, ff] of Object.entries(state.characters[name].fields)) {
             if (ff.locked) notes.push(`- characters.${name}.${fk}: LOCKED — must stay ${JSON.stringify(ff.value)}.`);
             else if (ff.type === 'enum' && Array.isArray(ff.options)) notes.push(`- characters.${name}.${fk}: one of ${ff.options.join(' / ')}.`);
         }
@@ -95,7 +106,7 @@ function constraintNotes(state, sec = {}, firstTurn = false) {
 }
 
 /** JSON Schema describing the response shape (unlocked fields only). */
-export function buildResponseSchema(state, sec = {}, firstTurn = false) {
+export function buildResponseSchema(state, sec = {}, firstTurn = false, charNames = null) {
     const props = {};
     if (state.clock && !state.clock.locked && firstTurn) {
         props.clock = { type: 'object', properties: { datetime: { type: 'string' } } };
@@ -122,7 +133,7 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false) {
     if (worldP) props.world = worldP;
     const usP = sec.userStats ? objOf(Object.entries(state.userStats), () => ({ type: 'number' })) : null;
     if (usP) props.userStats = usP;
-    const names = sec.characters !== false ? Object.keys(state.characters) : [];
+    const names = charNameList(state, sec, charNames);
     if (names.length) {
         const cp = {};
         for (const name of names) {
@@ -176,27 +187,32 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     const sec = settings.sections || {};
     const L = [];
 
+    const allNames = sec.characters !== false ? Object.keys(state.characters) : [];
+    const writable = allNames.filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
+    const others = allNames.filter((n) => !writable.includes(n));
+
     L.push('CURRENT WORLD STATE — reply with this object, updated:');
     L.push('```json');
-    L.push(JSON.stringify(currentAsJson(state, sec, firstTurn), null, 2));
+    L.push(JSON.stringify(currentAsJson(state, sec, firstTurn, writable), null, 2));
     L.push('```');
 
-    const notes = constraintNotes(state, sec, firstTurn);
+    const notes = constraintNotes(state, sec, firstTurn, writable);
     if (notes.length) {
         L.push('');
         L.push('Constraints:');
         L.push(...notes);
     }
 
-    const names = sec.characters !== false ? Object.keys(state.characters) : [];
-    if (names.length) {
-        const writable = names.filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
-        const readonly = names.filter((n) => !writable.includes(n));
+    if (allNames.length) {
         L.push('');
-        if (writable.length) L.push(`Report updates for these NPCs only: ${writable.join(', ')}.`);
-        if (readonly.length) L.push(`Do NOT report or change these NPCs this turn (not their turn to update): ${readonly.join(', ')}.`);
-        if (playerName && names.includes(playerName)) {
-            L.push(`${playerName} is both the player and a tracked character — report ${playerName}'s fields from their own messages and the narration.`);
+        if (writable.length) {
+            L.push(`Return a "characters" entry for EACH of: ${writable.join(', ')}. For each, copy every field and only change the ones the recent messages show changed.`);
+        }
+        if (others.length) {
+            L.push(`Other characters in the scene are context only — do NOT put them in your reply: ${others.join(', ')}.`);
+        }
+        if (playerName && allNames.includes(playerName)) {
+            L.push(`${playerName} is the player and a tracked character — update ${playerName}'s state from their own messages and the narration.`);
         } else if (playerName) {
             L.push(`Never report the player (${playerName}).`);
         }

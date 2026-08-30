@@ -5,7 +5,7 @@ import { loadSettings, MODULE_NAME } from './src/settings.js';
 import * as state from './src/state.js';
 import * as clockUtil from './src/clock.js';
 import { log, vlog, setVerbose } from './src/log.js';
-import { buildTrackerPrompt, buildResponseSchema, inScope } from './src/prompt.js';
+import { buildTrackerPrompt, buildResponseSchema, writableNames } from './src/prompt.js';
 import { parseTrackerResponse } from './src/parse.js';
 import { runTrackerRequest, listProfiles } from './src/request.js';
 import { diffToProposals, applyProposal } from './src/merge.js';
@@ -202,6 +202,7 @@ async function onManualUpdate(opts = {}) {
         if (baseData && baseData.clock && baseData.clock.iso) st.clock.iso = baseData.clock.iso;
     }
 
+    const writable = writableNames(st, authorName, settings.narratorName || '', c.name1 || '');
     const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn });
 
     // Snapshot the pre-query state (write-once) so a later swipe/regen/delete of
@@ -212,10 +213,10 @@ async function onManualUpdate(opts = {}) {
     updateJob = job;
     setBusy(true);
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
-    vlog('scope:', Object.keys(st.characters).map((k) => `${k}[${st.characters[k].updater}]=${inScope(st.characters[k], k, authorName, settings.narratorName || '', c.name1 || '') ? 'W' : 'ro'}`).join(' '));
+    vlog(`scope: writable=[${writable.join(', ')}] others=[${Object.keys(st.characters).filter((k) => !writable.includes(k)).join(', ')}]`);
 
     try {
-        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn) : null;
+        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable) : null;
         const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
         if (job.superseded) { log('response ignored (superseded)'); return; }
         vlog('tracker response (first 500):', String(text || '').slice(0, 500));

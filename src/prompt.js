@@ -79,7 +79,11 @@ function constraintNotes(state, sec = {}, firstTurn = false) {
     if (sec.characters === false) return notes;
     if (Object.keys(state.characters).length) {
         notes.push('- characters.<name>.present: boolean — true only when the character is physically in the current scene this turn; false when away. Change it only when the scene shows them arrive or leave.');
-        notes.push(`- characters.<name>.relationships: object mapping another tracked character's EXACT name to one of ${RELATIONSHIP_OPTIONS.join(' / ')} — how <name> regards that person (directional). Only names already in the cast. Add/adjust an entry only when the scene clearly shows the bond change.`);
+    }
+    // Only mention relationships once at least one exists — otherwise weak models
+    // try to fill a whole N×N matrix and mangle the JSON.
+    if (Object.values(state.characters).some((c) => c.rels && Object.keys(c.rels).length)) {
+        notes.push(`- characters.<name>.relationships: only the entries already shown, values one of ${RELATIONSHIP_OPTIONS.join(' / ')}. Change one ONLY when the scene clearly shifts that bond; never add new pairs.`);
     }
     for (const [name, c] of Object.entries(state.characters)) {
         for (const [fk, ff] of Object.entries(c.fields)) {
@@ -127,7 +131,9 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false) {
                     : ff.type === 'number' ? { type: 'number' } : { type: 'string' }
             )) || { type: 'object', properties: {} };
             if (!isPlayerName(name)) fp.properties.present = { type: 'boolean' };
-            fp.properties.relationships = { type: 'object', additionalProperties: { type: 'string', enum: RELATIONSHIP_OPTIONS } };
+            if (Object.keys(state.characters[name].rels || {}).length) {
+                fp.properties.relationships = { type: 'object', additionalProperties: { type: 'string', enum: RELATIONSHIP_OPTIONS } };
+            }
             if (Object.keys(fp.properties).length) cp[name] = fp;
         }
         if (Object.keys(cp).length) props.characters = { type: 'object', properties: cp };

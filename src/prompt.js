@@ -16,6 +16,9 @@ const DEFAULT_SYSTEM =
     + 'Output ONLY the JSON object — no prose, no markdown, no commentary, and do not think out loud. '
     + 'Never invent detail that the messages do not support.';
 
+/** Trim + case-insensitive name compare (author / narrator / updater matching). */
+const nameEq = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
 /** Remove injected tracker JSON / code blocks / tag soup from a message body. */
 function cleanMessage(mes, cap) {
     let s = String(mes ?? '');
@@ -27,15 +30,23 @@ function cleanMessage(mes, cap) {
     return s;
 }
 
-/** Character names writable this turn (self / by-name / narrator scoping). */
+/**
+ * Character names writable this turn (self / by-name / narrator scoping),
+ * ordered with the turn's author first — weak models front-load their effort on
+ * the first entry, so the character who just acted should lead.
+ */
 export function writableNames(state, authorName, narratorName = '', playerName = '') {
-    return Object.keys(state?.characters || {}).filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
+    const w = Object.keys(state?.characters || {}).filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
+    const lead = [];
+    const rest = [];
+    for (const n of w) (nameEq(n, authorName) ? lead : rest).push(n);
+    return [...lead, ...rest];
 }
 
 function charNameList(state, sec, charNames) {
-    let names = sec.characters !== false ? Object.keys(state.characters) : [];
-    if (Array.isArray(charNames)) names = names.filter((n) => charNames.includes(n));
-    return names;
+    if (sec.characters === false) return [];
+    if (Array.isArray(charNames)) return charNames.filter((n) => state.characters[n]); // keep caller's order
+    return Object.keys(state.characters);
 }
 
 /** The object we want back, pre-filled with the current real values. */
@@ -162,8 +173,6 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false, charName
  * @param {string} playerName   the persona name — a character sharing it is
  *                              always writable (the player's own appearance)
  */
-const nameEq = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
-
 export function inScope(entry, name, authorName, narratorName = '', playerName = '') {
     if (playerName && name === playerName) return true;
     const u = entry?.updater || 'narrator';
@@ -188,7 +197,7 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     const L = [];
 
     const allNames = sec.characters !== false ? Object.keys(state.characters) : [];
-    const writable = allNames.filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
+    const writable = writableNames(state, authorName, narratorName, playerName).filter((n) => allNames.includes(n));
     const others = allNames.filter((n) => !writable.includes(n));
 
     L.push('CURRENT WORLD STATE — reply with this object, updated:');
@@ -206,7 +215,11 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     if (allNames.length) {
         L.push('');
         if (writable.length) {
-            L.push(`Return a "characters" entry for EACH of: ${writable.join(', ')}. For each, copy every field and only change the ones the recent messages show changed.`);
+            L.push(`Your "characters" object MUST have one entry per name, for every one of: ${writable.join(', ')}. Copy each character's fields and change only what the recent messages show changed for THAT character.`);
+        }
+        const authorCard = writable.find((n) => nameEq(n, authorName) && n !== playerName);
+        if (authorCard) {
+            L.push(`${authorCard} wrote the latest message — update ${authorCard}'s own pose, position, state of dress, status and appearance from what it and the narration describe. Do not fold ${authorCard}'s state into another character.`);
         }
         if (others.length) {
             L.push(`Other characters in the scene are context only — do NOT put them in your reply: ${others.join(', ')}.`);

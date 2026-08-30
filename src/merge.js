@@ -8,6 +8,7 @@ import { addElapsed, format, deltaToSeconds, toIso as isoOf, humanDelta } from '
 import { fmtNum } from './ui/format.js';
 import { inScope } from './prompt.js';
 import { RELATIONSHIP_OPTIONS } from './schema.js';
+import { vlog } from './log.js';
 import * as state from './state.js';
 
 /** A usable character name — just non-empty (a real name like "Null" is fine). */
@@ -137,12 +138,14 @@ export function diffToProposals(st, data, opts = {}) {
 
     // --- characters ---
     if (sections.characters !== false && data.characters && typeof data.characters === 'object') {
+        vlog(`diff: character blocks = [${Object.keys(data.characters).join(', ')}]; author=${authorName}`);
         for (const [name, fields] of Object.entries(data.characters)) {
             if (!isRealName(name)) continue; // guard against "null"/"undefined"/"" keys
             const entry = st.characters[name];
             if (!entry) {
-                // Only the narrator introduces new NPCs.
-                if (inScope({ updater: 'narrator' }, name, authorName, narratorName)) {
+                const asNew = inScope({ updater: 'narrator' }, name, authorName, narratorName);
+                vlog(`diff: "${name}" not a tracked card -> ${asNew ? 'new-character proposal' : 'skipped'}`);
+                if (asNew) {
                     out.push({
                         path: `characters.${name}`, kind: 'new-character', label: `Track ${name}`,
                         from: '—', to: name, rawTo: { name, fields: fields || {} },
@@ -152,7 +155,9 @@ export function diffToProposals(st, data, opts = {}) {
                 continue;
             }
             // Ownership: skip characters that aren't this turn's to update.
-            if (!inScope(entry, name, authorName, narratorName, playerName)) continue;
+            const ok = inScope(entry, name, authorName, narratorName, playerName);
+            vlog(`diff: "${name}" tracked, updater=${entry.updater}, inScope=${ok}, fields=[${Object.keys(fields || {}).join(', ')}]`);
+            if (!ok) continue;
             for (const [fk, v] of Object.entries(fields || {})) {
                 if (fk === 'present') {
                     if (v == null || name === playerName) continue; // the player is always present

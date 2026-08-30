@@ -227,6 +227,7 @@ async function onManualUpdate(opts = {}) {
             return;
         }
         log('parsed tracker data:', res.data);
+        vlog('parsed characters:', JSON.stringify(res.data?.characters ?? null));
         ingestProposals(st, diffToProposals(st, res.data, {
             sourceMessageId: srcId, authorName, sections: settings.sections || {},
             narratorName: settings.narratorName || '', playerName: c.name1 || '',

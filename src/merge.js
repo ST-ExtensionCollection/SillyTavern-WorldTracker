@@ -120,7 +120,7 @@ export function diffToProposals(st, data, opts = {}) {
     if (sections.world !== false && data.world && typeof data.world === 'object') {
         for (const [k, v] of Object.entries(data.world)) {
             const f = st.world[k];
-            if (!f || f.locked || v == null || sameValue(f, v)) continue;
+            if (!f || f.locked || v == null || String(v).trim() === '?' || sameValue(f, v)) continue;
             out.push(fieldProposal(`world.${k}`, k, f, v, sourceMessageId));
         }
     }
@@ -191,7 +191,7 @@ export function diffToProposals(st, data, opts = {}) {
                     continue;
                 }
                 const f = entry.fields[fk];
-                if (!f || f.locked || v == null || sameValue(f, v)) continue;
+                if (!f || f.locked || v == null || String(v).trim() === '?' || sameValue(f, v)) continue;
                 out.push(fieldProposal(`characters.${name}.fields.${fk}`, `${name} · ${fk}`, f, v, sourceMessageId));
             }
         }

@@ -19,6 +19,9 @@ const DEFAULT_SYSTEM =
 /** Trim + case-insensitive name compare (author / narrator / updater matching). */
 const nameEq = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 
+/** Placeholder for an unset text field in the query JSON (models drop ""). */
+export const UNKNOWN = '?';
+
 /** Remove injected tracker JSON / code blocks / tag soup from a message body. */
 function cleanMessage(mes, cap) {
     let s = String(mes ?? '');
@@ -71,7 +74,9 @@ function currentAsJson(state, sec = {}, firstTurn = false, charNames = null) {
         for (const name of names) {
             o.characters[name] = isPlayerName(name) ? {} : { present: state.characters[name].present !== false };
             for (const [fk, ff] of Object.entries(state.characters[name].fields)) {
-                o.characters[name][fk] = ff.value;
+                // Show blanks as "?" — models routinely drop empty-string fields;
+                // an explicit "unknown" they'll actually replace.
+                o.characters[name][fk] = (ff.value === '' || ff.value == null) ? UNKNOWN : ff.value;
             }
             const rels = state.characters[name].rels;
             if (rels && Object.keys(rels).length) o.characters[name].relationships = { ...rels };
@@ -156,7 +161,10 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false, charName
             if (Object.keys(state.characters[name].rels || {}).length) {
                 fp.properties.relationships = { type: 'object', additionalProperties: { type: 'string', enum: RELATIONSHIP_OPTIONS } };
             }
-            if (Object.keys(fp.properties).length) cp[name] = fp;
+            // Require every field back — some backends honor this and stop the
+            // model dropping the ones it has "nothing to say" about.
+            fp.required = Object.keys(fp.properties);
+            if (fp.required.length) cp[name] = fp;
         }
         if (Object.keys(cp).length) props.characters = { type: 'object', properties: cp };
     }
@@ -220,8 +228,8 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     if (allNames.length) {
         L.push('');
         if (writable.length) {
-            L.push(`Your "characters" object MUST have one entry per name, for every one of: ${writable.join(', ')}. Copy each character's fields and change only what the recent messages show changed for THAT character.`);
-            L.push(`A blank field ("") that the scene now describes (a character's outfit, pose, position, physical status, where they are) SHOULD be filled in — that counts as a change. Base each character's fields on how THEY are described or acted on, not only on what they said.`);
+            L.push(`Your "characters" object MUST contain one entry per name, for every one of: ${writable.join(', ')}, with ALL of that character's fields present.`);
+            L.push(`Fields shown as "?" are unknown — replace each with what the recent messages show about THAT character (their outfit, pose, position, physical status, where they are). Keep "?" only if the scene genuinely says nothing about it. Base a character's fields on how THEY are described and acted on, never on another character's details.`);
         }
         const authorCard = writable.find((n) => nameEq(n, authorName) && n !== playerName);
         if (authorCard) {

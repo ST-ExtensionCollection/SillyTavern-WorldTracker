@@ -58,7 +58,7 @@ function fieldProposal(path, label, field, incoming, sourceMessageId) {
  * @returns {Array} proposals
  */
 export function diffToProposals(st, data, opts = {}) {
-    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '' } = opts;
+    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '', srcIsUser = false } = opts;
     const out = [];
     if (!data || typeof data !== 'object') return out;
 
@@ -155,7 +155,7 @@ export function diffToProposals(st, data, opts = {}) {
                 continue;
             }
             // Ownership: skip characters that aren't this turn's to update.
-            const ok = inScope(entry, name, authorName, narratorName, playerName);
+            const ok = inScope(entry, name, authorName, narratorName, playerName, srcIsUser);
             vlog(`diff: "${name}" tracked, updater=${entry.updater}, inScope=${ok}, fields=[${Object.keys(fields || {}).join(', ')}]`);
             if (!ok) continue;
             for (const [fk, v] of Object.entries(fields || {})) {

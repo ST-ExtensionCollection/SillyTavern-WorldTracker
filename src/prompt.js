@@ -35,8 +35,8 @@ function cleanMessage(mes, cap) {
  * ordered with the turn's author first — weak models front-load their effort on
  * the first entry, so the character who just acted should lead.
  */
-export function writableNames(state, authorName, narratorName = '', playerName = '') {
-    const w = Object.keys(state?.characters || {}).filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName));
+export function writableNames(state, authorName, narratorName = '', playerName = '', srcIsUser = false) {
+    const w = Object.keys(state?.characters || {}).filter((n) => inScope(state.characters[n], n, authorName, narratorName, playerName, srcIsUser));
     const lead = [];
     const rest = [];
     for (const n of w) (nameEq(n, authorName) ? lead : rest).push(n);
@@ -168,14 +168,19 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false, charName
  *   'narrator'  -> the narrator's turn (any turn if no narrator is set)
  *   'self'      -> a turn this character authored
  *   '<name>'    -> a turn that named character authored
+ * The persona's own card bypasses this while its updater is 'narrator'
+ * (default: always writable); set it to 'self' and it updates only on the
+ * user's own messages.
  * @param {string} authorName   who authored the triggering message
  * @param {string} narratorName the designated narrator ('' = any turn)
- * @param {string} playerName   the persona name — a character sharing it is
- *                              always writable (the player's own appearance)
+ * @param {string} playerName   the persona name
+ * @param {boolean} srcIsUser   the triggering message was written by the user
  */
-export function inScope(entry, name, authorName, narratorName = '', playerName = '') {
-    if (playerName && name === playerName) return true;
+export function inScope(entry, name, authorName, narratorName = '', playerName = '', srcIsUser = false) {
     const u = entry?.updater || 'narrator';
+    if (playerName && name === playerName) {
+        return u === 'self' ? !!srcIsUser : true;
+    }
     if (u === 'narrator') return narratorName ? nameEq(authorName, narratorName) : true;
     if (!authorName) return false;
     if (u === 'self') return nameEq(authorName, name);
@@ -189,7 +194,7 @@ export function inScope(entry, name, authorName, narratorName = '', playerName =
  * @returns {{ messages: {role:string, content:string}[] }}
  */
 export function buildTrackerPrompt(state, recent, opts = {}) {
-    const { settings = {}, playerName, authorName, firstTurn = false } = opts;
+    const { settings = {}, playerName, authorName, firstTurn = false, srcIsUser = false } = opts;
     const narratorName = settings.narratorName || '';
     const sys = settings.promptOverrides?.system || DEFAULT_SYSTEM;
     const cap = Number(settings.maxMessageChars) || 1500;
@@ -197,7 +202,7 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
     const L = [];
 
     const allNames = sec.characters !== false ? Object.keys(state.characters) : [];
-    const writable = writableNames(state, authorName, narratorName, playerName).filter((n) => allNames.includes(n));
+    const writable = writableNames(state, authorName, narratorName, playerName, srcIsUser).filter((n) => allNames.includes(n));
     const others = allNames.filter((n) => !writable.includes(n));
 
     L.push('CURRENT WORLD STATE — reply with this object, updated:');
@@ -224,7 +229,7 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
         if (others.length) {
             L.push(`Other characters in the scene are context only — do NOT put them in your reply: ${others.join(', ')}.`);
         }
-        if (playerName && allNames.includes(playerName)) {
+        if (playerName && writable.includes(playerName)) {
             L.push(`${playerName} is the player and a tracked character — update ${playerName}'s state from their own messages and the narration.`);
         } else if (playerName) {
             L.push(`Never report the player (${playerName}).`);

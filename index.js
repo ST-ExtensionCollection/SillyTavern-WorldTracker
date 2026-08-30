@@ -175,6 +175,7 @@ async function onManualUpdate(opts = {}) {
         ? opts.sourceMessageId
         : Math.max(0, chat.length - 1);
     const srcMsg = chat[srcId];
+    const srcIsUser = !!(srcMsg && srcMsg.is_user);
     // Context window ends AT the source message — never leak messages that come
     // after it (e.g. when re-rolling an older reply).
     const hi = Math.min(srcId, chat.length - 1);
@@ -202,8 +203,8 @@ async function onManualUpdate(opts = {}) {
         if (baseData && baseData.clock && baseData.clock.iso) st.clock.iso = baseData.clock.iso;
     }
 
-    const writable = writableNames(st, authorName, settings.narratorName || '', c.name1 || '');
-    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn });
+    const writable = writableNames(st, authorName, settings.narratorName || '', c.name1 || '', srcIsUser);
+    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn, srcIsUser });
 
     // Snapshot the pre-query state (write-once) so a later swipe/regen/delete of
     // this message can revert cleanly.
@@ -230,7 +231,7 @@ async function onManualUpdate(opts = {}) {
         vlog('parsed characters:', JSON.stringify(res.data?.characters ?? null));
         ingestProposals(st, diffToProposals(st, res.data, {
             sourceMessageId: srcId, authorName, sections: settings.sections || {},
-            narratorName: settings.narratorName || '', playerName: c.name1 || '',
+            narratorName: settings.narratorName || '', playerName: c.name1 || '', srcIsUser,
         }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }

@@ -455,11 +455,11 @@ function buildDetailBody() {
                 ${isPlayer ? '' : `<button class="wt-char-present" title="${absent ? 'Away — click to mark present' : 'Present — click to mark away'}"><i class="fa-solid ${absent ? 'fa-eye-slash' : 'fa-eye'}"></i></button>`}
                 <span class="wt-char-name">${esc(name)}${isPlayer ? ' <span class="wt-char-you">you</span>' : ''}</span>
                 ${isPlayer ? '' : `<button class="wt-char-rename" title="Rename ${esc(name)}"><i class="fa-solid fa-pen"></i></button>`}
-                ${isPlayer ? '' : `<select class="wt-updater" title="Who updates this character">
-                    <option value="narrator"${entry.updater === 'narrator' ? ' selected' : ''}>Narrator</option>
-                    <option value="self"${entry.updater === 'self' ? ' selected' : ''}>Self only (${esc(name)})</option>
-                    ${byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
-                </select>`}
+                <select class="wt-updater" title="When this card updates">
+                    <option value="narrator"${entry.updater === 'narrator' || (isPlayer && entry.updater !== 'self') ? ' selected' : ''}>${isPlayer ? 'Every turn' : 'Narrator'}</option>
+                    <option value="self"${entry.updater === 'self' ? ' selected' : ''}>${isPlayer ? 'Only my messages' : `Self only (${esc(name)})`}</option>
+                    ${isPlayer ? '' : byNames.map((n) => `<option value="${esc(n)}"${entry.updater === n ? ' selected' : ''}>By ${esc(n)}</option>`).join('')}
+                </select>
                 <button class="wt-char-remove" title="Stop tracking ${esc(name)}"><i class="fa-solid fa-trash"></i></button>
             </div></div>`);
             $c.find('.wt-char-present').on('click', () => handlers.onSetPresent?.(name, absent));

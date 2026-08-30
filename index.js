@@ -158,6 +158,16 @@ function stopUpdate(who) {
     if (who === 'user') toastr.info('WorldTracker: update cancelled.');
 }
 
+/** Drop unreviewed pending proposals tied to one source message. Returns the count removed. */
+function dropPendingFor(st, mesId) {
+    if (!Array.isArray(st.pending) || !st.pending.length) return 0;
+    const before = st.pending.length;
+    st.pending = st.pending.filter((p) => p.sourceMessageId !== mesId);
+    const removed = before - st.pending.length;
+    if (removed) state.save();
+    return removed;
+}
+
 async function onManualUpdate(opts = {}) {
     const st = getState();
     if (!st) { toastr.warning('WorldTracker: no active chat.'); return; }
@@ -983,8 +993,12 @@ jQuery(async () => {
             || (st.history || []).some((r) => r.mesId === mesId);
         if (!tracked) { vlog(`swipe @${mesId}: untracked, ignoring`); return; }
         stopUpdate('swiped');
+        // Pending proposals belong to the swipe that just generated them and
+        // were never reviewed — a fresh swipe gets a fresh tracker pass, so
+        // drop the stale queue rather than let it bleed across swipes.
+        const dropped = dropPendingFor(st, mesId);
         const ok = state.restoreToSwipe(st, mesId, sid, settings.schema);
-        log(`swipe @${mesId} -> #${sid}: rebuilt=${ok}`);
+        log(`swipe @${mesId} -> #${sid}: rebuilt=${ok}, dropped ${dropped} pending`);
         refresh();
     };
 
@@ -1003,9 +1017,10 @@ jQuery(async () => {
         }
         const m = SillyTavern.getContext().chat?.[mesId];
         const target = Number.isFinite(newSwipe) ? newSwipe : (m?.swipe_id ?? 0);
+        const dropped = dropPendingFor(st, mesId);
         state.restoreToSwipe(st, mesId, target, settings.schema);
         state.save();
-        log(`swipe-deleted @${mesId} #${delSwipe} -> #${target}`);
+        log(`swipe-deleted @${mesId} #${delSwipe} -> #${target}, dropped ${dropped} pending`);
         refresh();
     };
 

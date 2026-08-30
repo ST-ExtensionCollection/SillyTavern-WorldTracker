@@ -28,6 +28,13 @@ export function buildSummary(st, sec = {}) {
     }
     if (sec.characters !== false) {
         for (const [name, c] of Object.entries(st.characters)) {
+            // Absent characters don't clutter the scene: one who has been in a
+            // scene before gets a bare "not present" note (so the model doesn't
+            // write them in); one who never appeared is omitted entirely.
+            if (c.present === false) {
+                if (c.lastPresentTs) lines.push(`${name} — not present`);
+                continue;
+            }
             const bits = Object.entries(c.fields)
                 .filter(([, f]) => f.value !== '' && f.value != null)
                 .map(([fk, f]) => `${fk}: ${f.value}`);
@@ -36,8 +43,7 @@ export function buildSummary(st, sec = {}) {
                 for (const [obj, rel] of Object.entries(c.rels)) (groups[rel] ||= []).push(obj);
                 bits.push('rels: ' + Object.entries(groups).map(([r, ns]) => `${r}→${ns.join(',')}`).join('; '));
             }
-            const tag = c.present === false ? ' (not present)' : '';
-            if (bits.length) lines.push(`${name}${tag} — ${bits.join('; ')}`);
+            if (bits.length) lines.push(`${name} — ${bits.join('; ')}`);
         }
     }
     return lines.length > 1 ? lines.join('\n') : '';

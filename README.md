@@ -162,8 +162,12 @@ Each character card has an **eye** toggle. Marking a character *away* fades the
 card, folds its fields, and drops it below the present characters (most recently
 present first). The tracker can also set presence on its own — it's asked for a
 `present` boolean per character and proposes a change when the scene shows
-someone arrive or leave. Absent characters are tagged **(not present)** in the
-injected `[World State]` block.
+someone arrive or leave.
+
+Absent characters are kept out of the injected `[World State]` block so NPCs
+from other scenes don't pile up: one who has been present before shows only as
+`<name> — not present`; one who never appeared is left out entirely. (The
+tracker query still sees them, so they come back cleanly when they return.)
 
 ### Reordering cards
 

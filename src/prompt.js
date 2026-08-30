@@ -221,6 +221,7 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
         L.push('');
         if (writable.length) {
             L.push(`Your "characters" object MUST have one entry per name, for every one of: ${writable.join(', ')}. Copy each character's fields and change only what the recent messages show changed for THAT character.`);
+            L.push(`A blank field ("") that the scene now describes (a character's outfit, pose, position, physical status, where they are) SHOULD be filled in — that counts as a change. Base each character's fields on how THEY are described or acted on, not only on what they said.`);
         }
         const authorCard = writable.find((n) => nameEq(n, authorName) && n !== playerName);
         if (authorCard) {

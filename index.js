@@ -193,12 +193,15 @@ async function onManualUpdate(opts = {}) {
     const recent = chat.slice(lo, hi + 1).map((m) => ({ name: m.name, is_user: !!m.is_user, mes: m.mes }));
 
     // Who "owns" this turn for self / by-name updater scoping. The source
-    // message's author when it's a character; otherwise (a user message
-    // triggered the pass) the most recent character speaker in the window — so
-    // in a solo chat "self only" still updates every turn.
+    // message's author when it's a non-user speaker — including an untracked
+    // narrator, whose name still drives narrator-updater scoping. Only a
+    // USER-triggered pass falls back to the most recent character speaker in
+    // the window, so a solo chat's "self only" still updates every turn.
+    // (Falling back on a narrator turn would wrongly pull "self" cards into
+    // scope and drop "narrator" cards out of it.)
     const loose = (nm) => Object.keys(st.characters).find((k) => k.trim().toLowerCase() === String(nm ?? '').trim().toLowerCase());
     let authorName = srcMsg && !srcMsg.is_user ? srcMsg.name : null;
-    if (!authorName || !loose(authorName)) {
+    if ((!authorName || !loose(authorName)) && (srcIsUser || !srcMsg)) {
         for (let i = hi; i >= lo; i--) {
             if (chat[i] && !chat[i].is_user && loose(chat[i].name)) { authorName = chat[i].name; break; }
         }

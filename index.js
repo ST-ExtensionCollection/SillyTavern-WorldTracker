@@ -958,7 +958,12 @@ jQuery(async () => {
     eventSource.on(event_types.GENERATION_STARTED, (_type, _opts, dryRun) => { if (!dryRun) genActive = true; });
     eventSource.on(event_types.GENERATION_ENDED, () => { genActive = false; });
     eventSource.on(event_types.GENERATION_STOPPED, () => { genActive = false; });
-    eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => {
+    eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id, type) => {
+        // 'first_message' fires whenever ST (re)splices the greeting in - on
+        // chat open, and also when a character is edited while chat still
+        // holds only its untouched greeting (ST recreates it from the card).
+        // Neither is an actual generation, so don't burn a request on it.
+        if (type === 'first_message') return;
         if (['ai', 'both'].includes(settings.autoMode)) autoUpdate('ai message', id);
     });
     eventSource.on(event_types.USER_MESSAGE_RENDERED, (id) => {

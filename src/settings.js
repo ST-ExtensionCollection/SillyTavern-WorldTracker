@@ -40,9 +40,11 @@ function defaultSettings() {
         // Auto-track the persona as its own character card (name = ctx.name1),
         // seeded from schema.player. Off => add it by hand if you want it.
         trackPlayer: true,
-        // The chat's narrator character. '' = any turn counts as the narrator's
-        // (characters with updater 'narrator' then update every turn).
+        // The chat's narrator character, live-resolved per chat/group from
+        // narratorByChat on CHAT_CHANGED (not part of a profile). '' = any
+        // turn counts as the narrator's (updater 'narrator' fires every turn).
         narratorName: '',
+        narratorByChat: {},         // chatKey -> narrator character name
         floatPos: { x: 80, y: 80 },
         floatSize: { w: 340, h: 420 },
         dockSide: 'right',          // 'left' | 'right'

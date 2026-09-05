@@ -285,6 +285,7 @@ function renameCharacter(oldName, newName) {
     if (!st) return;
     const r = state.renameCharacter(st, oldName, newName);
     if (!r.ok) { toastr.warning(`WorldTracker: ${r.reason}.`); return; }
+    profiles.renameNarratorEverywhere(settings, oldName, newName);
     if (settings.narratorName === oldName) { settings.narratorName = newName; saveSettingsDebounced(); }
     log(`renamed "${oldName}" -> "${newName}"`);
     refresh();
@@ -920,6 +921,10 @@ jQuery(async () => {
                 vlog(`profile -> "${profiles.active(settings)?.name}" for this chat`);
             }
         } catch (e) { vlog('profile resolve failed', e); }
+
+        // Narrator is per chat/group, not part of a profile.
+        settings.narratorName = profiles.narratorFor(settings, profiles.chatKey(ctx));
+        vlog(`narrator -> "${settings.narratorName || '(any)'}" for this chat`);
 
         state.get(settings.schema); // seed/reconcile for the new chat
         const st = getState();

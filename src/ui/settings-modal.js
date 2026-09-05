@@ -206,30 +206,14 @@ const SECTION_PILLS = [
     { key: 'characters', label: 'Characters', icon: 'fa-users' },
 ];
 
-/** Build the editable body from a { schema, sections, narratorName } snapshot. */
+/** Build the editable body from a { schema, sections } snapshot. */
 function buildBody(data) {
     const s = data.schema;
     const sec0 = { ...DEFAULT_SECTIONS, ...(data.sections || {}) };
     const $c = $('<div class="wt-cfg-body"></div>');
 
-    // narrator
-    const members = groupMemberNames();
-    const curNarr = data.narratorName || '';
-    const narrOpts = [...new Set(members.concat(curNarr && !members.includes(curNarr) ? [curNarr] : []))];
     const head = (title, actions = '') =>
         `<div class="wt-cfg-sec-head"><span class="wt-cfg-head-label"><i class="wt-cfg-chevron fa-solid fa-chevron-down"></i> ${title}</span>${actions ? `<span class="wt-cfg-sec-actions">${actions}</span>` : ''}</div>`;
-
-    const $narr = $(`
-        <div class="wt-cfg-sec">
-            ${head('Narrator character')}
-            <select class="text_pole wt-narr">
-                <option value=""${curNarr ? '' : ' selected'}>(any turn)</option>
-                ${narrOpts.map((n) => `<option value="${esc(n)}"${n === curNarr ? ' selected' : ''}>${esc(n)}</option>`).join('')}
-            </select>
-            <small class="notes">Characters set to updater "Narrator" update only on this character's turns. "(any turn)" = every turn.</small>
-        </div>
-    `);
-    $c.append($narr);
 
     // section pills
     const $pills = $('<div class="wt-cfg-pills"></div>');
@@ -290,7 +274,6 @@ function buildBody(data) {
             player: { ...(s.player || {}), fields: readRows(player.$list, 'player') },
         },
         sections: { world: pillOn('world'), userStats: pillOn('userStats'), characters: pillOn('characters') },
-        narratorName: String($narr.find('.wt-narr').val() || ''),
     });
 
     return { $c, read, onRestoreAll: (cb) => $c.find('.wt-cfg-restore-all').on('click', cb) };
@@ -307,7 +290,7 @@ async function promptName(ctx, title, def = '') {
 
 /**
  * @param {object} ctx       SillyTavern context
- * @param {object} settings  live settings (schema/sections/narratorName + profiles)
+ * @param {object} settings  live settings (schema/sections + profiles + narratorByChat)
  * @param {() => void} persist  re-apply settings.schema to the current chat + refresh UI
  */
 export async function openSettingsModal(ctx, settings, persist) {
@@ -317,6 +300,31 @@ export async function openSettingsModal(ctx, settings, persist) {
 
     let working = profiles.snapshot(settings);
     let body = buildBody(working);
+
+    // Narrator is per chat/group, not part of a profile - its own control,
+    // reading/writing narratorByChat directly and applying immediately.
+    const narrKey = profiles.chatKey(ctx);
+    const curNarr = profiles.narratorFor(settings, narrKey);
+    const members = groupMemberNames();
+    const narrOpts = [...new Set(members.concat(curNarr && !members.includes(curNarr) ? [curNarr] : []))];
+    const $narrBar = $(`
+        <div class="wt-cfg-sec">
+            <div class="wt-cfg-sec-head"><span class="wt-cfg-head-label"><i class="wt-cfg-chevron fa-solid fa-chevron-down"></i> Narrator character</span></div>
+            <select class="text_pole wt-narr"${narrKey ? '' : ' disabled'}>
+                <option value=""${curNarr ? '' : ' selected'}>(any turn)</option>
+                ${narrOpts.map((n) => `<option value="${esc(n)}"${n === curNarr ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+            </select>
+            <small class="notes">${narrKey
+        ? 'Per chat/group, not saved with a profile. Characters set to updater "Narrator" update only on this character\'s turns. "(any turn)" = every turn.'
+        : 'No chat/group open to bind this to.'}</small>
+        </div>
+    `);
+    $narrBar.find('.wt-narr').on('change', function () {
+        const val = String(this.value || '');
+        profiles.setNarrator(settings, narrKey, val);
+        settings.narratorName = val;
+        saveGlobal();
+    });
 
     const $wrap = $('<div class="wt-cfg"></div>');
     const $bar = $(`
@@ -335,11 +343,15 @@ export async function openSettingsModal(ctx, settings, persist) {
         </div>
     `);
     const $bodyHost = $('<div class="wt-cfg-body-host"></div>').append(body.$c);
-    $wrap.append($bar, $bodyHost);
+    $wrap.append($narrBar, $bar, $bodyHost);
 
     $bar.find('.wt-cfg-sec-head').on('click', (e) => {
         if ($(e.target).closest('button, select, input').length) return;
         $bar.toggleClass('wt-collapsed');
+    });
+    $narrBar.find('.wt-cfg-sec-head').on('click', (e) => {
+        if ($(e.target).closest('button, select, input').length) return;
+        $narrBar.toggleClass('wt-collapsed');
     });
 
     const rebuild = (data) => {
@@ -352,7 +364,7 @@ export async function openSettingsModal(ctx, settings, persist) {
         body.onRestoreAll(async () => {
             const ok = await ctx.callGenericPopup('Reset fields and sections to defaults? (does not touch other profiles)', ctx.POPUP_TYPE.CONFIRM);
             if (ok !== ctx.POPUP_RESULT.AFFIRMATIVE) return;
-            rebuild({ schema: defaultSchema(), sections: { ...DEFAULT_SECTIONS }, narratorName: working.narratorName });
+            rebuild({ schema: defaultSchema(), sections: { ...DEFAULT_SECTIONS } });
         });
     }
     wireRestoreAll();
@@ -388,7 +400,7 @@ export async function openSettingsModal(ctx, settings, persist) {
     $bar.find('.wt-prof-new').on('click', async () => {
         const name = await promptName(ctx, 'Name the new profile', 'New profile');
         if (!name) return;
-        profiles.create(settings, name, { schema: defaultSchema(), sections: { ...DEFAULT_SECTIONS }, narratorName: '' });
+        profiles.create(settings, name, { schema: defaultSchema(), sections: { ...DEFAULT_SECTIONS } });
         profiles.applyData(settings, profiles.active(settings).data);
         rebuild(profiles.snapshot(settings));
         refreshBar();

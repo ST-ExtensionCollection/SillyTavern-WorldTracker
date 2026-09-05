@@ -7,7 +7,7 @@
 import { defaultSchema } from './schema.js';
 
 /** Keys a profile owns. */
-const PROFILE_KEYS = ['schema', 'sections', 'narratorName'];
+const PROFILE_KEYS = ['schema', 'sections'];
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -144,4 +144,30 @@ export function resolveForChat(settings, ctx) {
     if (bound) return bound;
     if (p.defaultId && p.list[p.defaultId]) return p.defaultId;
     return p.activeId || '';
+}
+
+// --- narrator (per chat/group, not part of a profile) ---
+
+function narratorMap(settings) {
+    if (!settings.narratorByChat || typeof settings.narratorByChat !== 'object') settings.narratorByChat = {};
+    return settings.narratorByChat;
+}
+
+/** The designated narrator for chat `key`. '' = any turn (the default). */
+export function narratorFor(settings, key) {
+    return (key && narratorMap(settings)[key]) || '';
+}
+
+/** Set (or, with an empty name, clear) the narrator for chat `key`. */
+export function setNarrator(settings, key, name) {
+    if (!key) return;
+    const m = narratorMap(settings);
+    if (name) m[key] = name;
+    else delete m[key];
+}
+
+/** Rename a narrator binding everywhere it's referenced, after a character rename. */
+export function renameNarratorEverywhere(settings, oldName, newName) {
+    const m = narratorMap(settings);
+    for (const k of Object.keys(m)) if (m[k] === oldName) m[k] = newName;
 }

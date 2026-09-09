@@ -23,6 +23,18 @@ function sameValue(field, incoming) {
     return String(cur ?? '').trim() === String(incoming ?? '').trim();
 }
 
+/**
+ * Models sometimes tack a stray `presence: true` (or `present: false`) onto the
+ * LAST field of a character block — usually `pose` — as trailing text or as an
+ * extra key on a wrapper object. It's never a real field value; drop it.
+ */
+function scrubStrayKeys(s) {
+    return String(s)
+        .replace(/[\s,;]*["']?\b(?:presence|present)\b["']?\s*[:=]\s*(?:true|false|["'`]?\w+["'`]?)\s*$/i, '')
+        .replace(/[\s,;]+$/, '')
+        .trim();
+}
+
 function coerce(field, v) {
     if (field.type === 'number') {
         let n = Number(v);
@@ -30,7 +42,11 @@ function coerce(field, v) {
         if (field.max != null) n = Math.max(0, Math.min(field.max, Math.round(n)));
         return n;
     }
-    return typeof v === 'string' ? v.trim() : v;
+    // Model wrapped the value in an object and slipped extra keys in.
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+        v = v.text ?? v.value ?? v.description ?? '';
+    }
+    return typeof v === 'string' ? scrubStrayKeys(v) : v;
 }
 
 function displayVal(field, v) {
@@ -191,8 +207,9 @@ export function diffToProposals(st, data, opts = {}) {
                     continue;
                 }
                 const f = entry.fields[fk];
-                if (!f || f.locked || v == null || String(v).trim() === '?' || sameValue(f, v)) continue;
-                out.push(fieldProposal(`characters.${name}.fields.${fk}`, `${name} · ${fk}`, f, v, sourceMessageId));
+                const cv = coerce(f || { type: 'text' }, v);
+                if (!f || f.locked || cv == null || String(cv).trim() === '?' || sameValue(f, cv)) continue;
+                out.push(fieldProposal(`characters.${name}.fields.${fk}`, `${name} · ${fk}`, f, cv, sourceMessageId));
             }
         }
     }

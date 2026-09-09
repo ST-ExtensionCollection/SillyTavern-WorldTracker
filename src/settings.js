@@ -26,6 +26,8 @@ function defaultSettings() {
                                     // get cut off before it writes the JSON
         reasoningEffort: 'low',     // '' | 'minimal' | 'low' | 'medium' | 'high'
         structuredOutput: true,     // pass a json_schema to force valid JSON
+        inheritPreset: false,       // inherit samplers (temp, DRY, rep pen…) from
+                                    // the connection profile's bound text-completion preset
         debug: false,               // verbose console logging
 
         // --- approval ---

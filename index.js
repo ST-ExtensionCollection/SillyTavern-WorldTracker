@@ -684,6 +684,10 @@ function buildSettingsDrawer() {
                     <span>Request structured JSON output (json_schema)</span>
                 </label>
                 <label class="checkbox_label">
+                    <input type="checkbox" id="wt-inherit-preset">
+                    <span>Inherit samplers from the profile's preset (temp, DRY, rep pen…)</span>
+                </label>
+                <label class="checkbox_label">
                     <input type="checkbox" id="wt-debug">
                     <span>Verbose console logging</span>
                 </label>
@@ -774,6 +778,8 @@ function buildSettingsDrawer() {
 
     $('#wt-structured').prop('checked', settings.structuredOutput !== false)
         .on('change', function () { settings.structuredOutput = this.checked; saveSettingsDebounced(); });
+    $('#wt-inherit-preset').prop('checked', !!settings.inheritPreset)
+        .on('change', function () { settings.inheritPreset = this.checked; saveSettingsDebounced(); });
     $('#wt-debug').prop('checked', !!settings.debug)
         .on('change', function () { settings.debug = this.checked; setVerbose(this.checked); saveSettingsDebounced(); });
 

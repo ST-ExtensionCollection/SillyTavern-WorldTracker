@@ -43,8 +43,13 @@ export async function runTrackerRequest(messages, settings, ctx, signal, schema)
     const profiles = listProfiles(ctx);
     const profile = settings.profileId && profiles.find((p) => p.id === settings.profileId);
 
+    // Opt-in: pull samplers (temperature, DRY, rep pen, XTC…) and the instruct
+    // template from whatever preset the chosen connection profile binds. Off by
+    // default — the tracker wants deterministic JSON, not RP samplers.
+    const inheritPreset = !!settings.inheritPreset;
+
     if (profile && ctx.ConnectionManagerRequestService) {
-        log(`request via connection profile "${profile.name}" (max_tokens ${maxTokens}, effort ${settings.reasoningEffort || 'default'})`);
+        log(`request via connection profile "${profile.name}" (max_tokens ${maxTokens}, effort ${settings.reasoningEffort || 'default'}, preset ${inheritPreset ? 'inherited' : 'off'})`);
         // Stream it: a non-streaming request runs to completion on the backend
         // even after the client aborts (the abort only lands at send time). A
         // streamed request dies the moment the connection drops — that's how
@@ -53,7 +58,7 @@ export async function runTrackerRequest(messages, settings, ctx, signal, schema)
             profile.id,
             messages,
             maxTokens,
-            { stream: true, extractData: true, signal, includePreset: false, includeInstruct: false },
+            { stream: true, extractData: true, signal, includePreset: inheritPreset, includeInstruct: inheritPreset },
             override,
         );
         if (typeof out === 'function') {

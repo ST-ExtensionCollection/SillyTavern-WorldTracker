@@ -24,14 +24,17 @@ function sameValue(field, incoming) {
 }
 
 /**
- * Models sometimes tack a stray `presence: true` (or `present: false`) onto the
- * LAST field of a character block — usually `pose` — as trailing text or as an
- * extra key on a wrapper object. It's never a real field value; drop it.
+ * Models sometimes tack junk onto the LAST field of a character block — usually
+ * `pose` — as trailing text: a stray `presence: true` / `present: false`, or a
+ * fresh markdown code fence and the start of another JSON object (```json{ …).
+ * None of it is a real field value; drop it.
  */
 function scrubStrayKeys(s) {
     return String(s)
+        // A code fence and anything after it — the model started a second block.
+        .replace(/\s*`{3,}[\s\S]*$/, '')
         .replace(/[\s,;]*["']?\b(?:presence|present)\b["']?\s*[:=]\s*(?:true|false|["'`]?\w+["'`]?)\s*$/i, '')
-        .replace(/[\s,;]+$/, '')
+        .replace(/[\s,;{[]+$/, '')
         .trim();
 }
 

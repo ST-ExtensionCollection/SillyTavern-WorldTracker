@@ -11,6 +11,7 @@
     --wt-fg: var(--SmartThemeBodyColor, #e8e8e8);
     --wt-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.2));
     --wt-accent: var(--SmartThemeQuoteColor, #6ea8fe);
+    --wt-del: #e5657a;
 }
 
 #wt-root,
@@ -920,6 +921,32 @@ body:has(#wt-inline) #extensionTopBar {
 .wt-review-diff .wt-to {
     color: var(--wt-accent);
     font-weight: 600;
+}
+
+/* Word-level diff: the wrapper stays neutral so only the changed runs inside
+   it carry strike / highlight. */
+.wt-review-diff .wt-from.wt-tok,
+.wt-review-diff .wt-to.wt-tok {
+    opacity: 1;
+    color: inherit;
+    font-weight: inherit;
+    text-decoration: none;
+}
+
+.wt-review-diff .wt-del {
+    text-decoration: line-through;
+    color: var(--wt-del);
+    background: color-mix(in srgb, var(--wt-del) 16%, transparent);
+    border-radius: 3px;
+    padding: 0 0.1rem;
+}
+
+.wt-review-diff .wt-ins {
+    color: var(--wt-accent);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--wt-accent) 16%, transparent);
+    border-radius: 3px;
+    padding: 0 0.1rem;
 }
 
 .wt-review-reason {

@@ -5,7 +5,7 @@
 // supplied by index.js. It does NOT mutate state itself.
 
 import { fieldRow } from './fields.js';
-import { displayValue, esc, iconFor } from './format.js';
+import { displayValue, esc, iconFor, renderDiff } from './format.js';
 import { makeDraggable, makeResizable, makeSortable } from './drag.js';
 import { RELATIONSHIP_OPTIONS } from '../schema.js';
 import { vlog } from '../log.js';
@@ -218,7 +218,7 @@ function buildPendingItem(p) {
     const $item = $(`
         <div class="wt-review-item" data-id="${esc(p.id)}">
             <div class="wt-review-label">${esc(p.label || p.path)}${p.expected ? ' <span class="wt-review-tag" title="Model reported no elapsed time — using your Expected next interval">expected</span>' : ''}</div>
-            <div class="wt-review-diff"><span class="wt-from">${esc(p.from ?? '—')}</span><i class="fa-solid fa-arrow-right"></i><span class="wt-to">${esc(p.to ?? '—')}</span></div>
+            <div class="wt-review-diff">${renderDiff(p.from, p.to)}</div>
             ${p.reason ? `<div class="wt-review-reason">${esc(p.reason)}</div>` : ''}
             <div class="wt-review-btns">
                 ${p.kind === 'clock' ? `<button class="wt-approve-exp" title="Use your expected interval instead">exp</button>` : ''}
@@ -252,7 +252,7 @@ function historyItem(ch) {
     return $(`
         <div class="wt-review-item wt-history-item">
             <div class="wt-review-label">${esc(ch.label || ch.path)}</div>
-            <div class="wt-review-diff"><span class="wt-from">${esc(ch.before ?? '—')}</span><i class="fa-solid fa-arrow-right"></i><span class="wt-to">${esc(ch.after ?? '—')}</span></div>
+            <div class="wt-review-diff">${renderDiff(ch.before, ch.after)}</div>
         </div>
     `);
 }

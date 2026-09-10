@@ -122,7 +122,7 @@ function constraintNotes(state, sec = {}, firstTurn = false, charNames = null) {
 }
 
 /** JSON Schema describing the response shape (unlocked fields only). */
-export function buildResponseSchema(state, sec = {}, firstTurn = false, charNames = null) {
+export function buildResponseSchema(state, sec = {}, firstTurn = false, charNames = null, discoverNpcs = false) {
     const props = {};
     if (state.clock && !state.clock.locked && firstTurn) {
         props.clock = { type: 'object', properties: { datetime: { type: 'string' } } };
@@ -167,6 +167,15 @@ export function buildResponseSchema(state, sec = {}, firstTurn = false, charName
             if (fp.required.length) cp[name] = fp;
         }
         if (Object.keys(cp).length) props.characters = { type: 'object', properties: cp };
+    }
+    // Let the model volunteer entries for characters not in the tracked set.
+    if (discoverNpcs && sec.characters !== false) {
+        if (!props.characters) props.characters = { type: 'object', properties: {} };
+        props.characters.additionalProperties = {
+            type: 'object',
+            properties: { present: { type: 'boolean' } },
+            additionalProperties: { type: 'string' },
+        };
     }
     return { type: 'object', properties: props };
 }
@@ -243,6 +252,13 @@ export function buildTrackerPrompt(state, recent, opts = {}) {
         } else if (playerName) {
             L.push(`Never report the player (${playerName}).`);
         }
+    }
+
+    // NPC discovery — narrator turns only (matches merge.diffToProposals).
+    const narratorTurn = !narratorName || nameEq(authorName, narratorName);
+    if (settings.discoverNpcs !== false && sec.characters !== false && narratorTurn) {
+        L.push('');
+        L.push('NEW CHARACTERS: if a clearly named individual is present and acting in the recent messages but has no entry in the state above, add an entry for them under "characters" with their fields filled from what the scene shows. Named individuals only — never crowds, groups, unnamed extras, or people only mentioned in passing.');
     }
 
     if (settings.promptOverrides?.instruction) {

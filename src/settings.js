@@ -42,6 +42,10 @@ function defaultSettings() {
         // Auto-track the persona as its own character card (name = ctx.name1),
         // seeded from schema.player. Off => add it by hand if you want it.
         trackPlayer: true,
+        // Let the tracker propose brand-new character cards for named NPCs that
+        // turn up in the scene (narrator turns only). Off => only already-tracked
+        // characters are ever updated.
+        discoverNpcs: true,
         // The chat's narrator character, live-resolved per chat/group from
         // narratorByChat on CHAT_CHANGED (not part of a profile). '' = any
         // turn counts as the narrator's (updater 'narrator' fires every turn).

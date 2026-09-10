@@ -230,7 +230,7 @@ async function onManualUpdate(opts = {}) {
     vlog(`scope: writable=[${writable.join(', ')}] others=[${Object.keys(st.characters).filter((k) => !writable.includes(k)).join(', ')}]`);
 
     try {
-        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable) : null;
+        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable, settings.discoverNpcs !== false) : null;
         const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
         if (job.superseded) { log('response ignored (superseded)'); return; }
         vlog('tracker response (first 500):', String(text || '').slice(0, 500));
@@ -245,6 +245,7 @@ async function onManualUpdate(opts = {}) {
         ingestProposals(st, diffToProposals(st, res.data, {
             sourceMessageId: srcId, authorName, sections: settings.sections || {},
             narratorName: settings.narratorName || '', playerName: c.name1 || '', srcIsUser,
+            discoverNpcs: settings.discoverNpcs !== false,
         }));
     } catch (err) {
         if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
@@ -676,6 +677,10 @@ function buildSettingsDrawer() {
                     <span>Track my character (remembers your appearance &amp; conditions)</span>
                 </label>
                 <label class="checkbox_label">
+                    <input type="checkbox" id="wt-discover-npcs">
+                    <span>Discover new characters (propose cards for named NPCs on narrator turns)</span>
+                </label>
+                <label class="checkbox_label">
                     <input type="checkbox" id="wt-auto-approve">
                     <span>Auto-approve all changes (skip review)</span>
                 </label>
@@ -775,6 +780,9 @@ function buildSettingsDrawer() {
             }
             refresh();
         });
+
+    $('#wt-discover-npcs').prop('checked', settings.discoverNpcs !== false)
+        .on('change', function () { settings.discoverNpcs = this.checked; saveSettingsDebounced(); });
 
     $('#wt-structured').prop('checked', settings.structuredOutput !== false)
         .on('change', function () { settings.structuredOutput = this.checked; saveSettingsDebounced(); });

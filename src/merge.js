@@ -74,7 +74,7 @@ function fieldProposal(path, label, field, incoming, sourceMessageId) {
  * @returns {Array} proposals
  */
 export function diffToProposals(st, data, opts = {}) {
-    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '', srcIsUser = false } = opts;
+    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '', srcIsUser = false, discoverNpcs = true } = opts;
     const out = [];
     if (!data || typeof data !== 'object') return out;
 
@@ -159,8 +159,8 @@ export function diffToProposals(st, data, opts = {}) {
             if (!isRealName(name)) continue; // guard against "null"/"undefined"/"" keys
             const entry = st.characters[name];
             if (!entry) {
-                const asNew = inScope({ updater: 'narrator' }, name, authorName, narratorName);
-                vlog(`diff: "${name}" not a tracked card -> ${asNew ? 'new-character proposal' : 'skipped'}`);
+                const asNew = discoverNpcs && inScope({ updater: 'narrator' }, name, authorName, narratorName);
+                vlog(`diff: "${name}" not a tracked card -> ${asNew ? 'new-character proposal' : (discoverNpcs ? 'skipped (out of scope)' : 'skipped (discovery off)')}`);
                 if (asNew) {
                     out.push({
                         path: `characters.${name}`, kind: 'new-character', label: `Track ${name}`,

@@ -190,7 +190,34 @@ export function renderPanel() {
         else if (mode === 'float') renderFloat();
         else renderBanner();
     }
+
+    // renderMessageCards() inserts .wt-card divs in-flow inside #chat (above
+    // .mes_text), often long after the message already rendered (async
+    // tracker pass) — i.e. while the user may already be reading. Neither we
+    // nor ST re-pin scroll after that mutation, so it must not silently shift
+    // whatever's currently in view: stay pinned to the bottom if that's where
+    // the user already was, otherwise hold their exact reading position by
+    // compensating for the height the card(s) added/removed.
+    const chatEl = document.getElementById('chat');
+    const pre = chatEl && { top: chatEl.scrollTop, height: chatEl.scrollHeight, client: chatEl.clientHeight };
+    const wasAtBottom = pre ? (pre.height - pre.top - pre.client) < 4 : false;
+
     renderMessageCards();
+    updateSendBadge();
+
+    if (chatEl && pre) {
+        const fixChatScroll = () => {
+            if (wasAtBottom) {
+                chatEl.scrollTop = chatEl.scrollHeight;
+            } else {
+                const delta = chatEl.scrollHeight - pre.height;
+                if (delta) chatEl.scrollTop = pre.top + delta;
+            }
+        };
+        fixChatScroll();
+        requestAnimationFrame(fixChatScroll);
+        setTimeout(fixChatScroll, 300);
+    }
 
     if (prevScroll) {
         const restore = () => { const el = document.querySelector(SCROLLER_SEL); if (el && el.scrollTop !== prevScroll) el.scrollTop = prevScroll; };
@@ -329,6 +356,30 @@ function renderMessageCards() {
 
         anchor.before($card[0]);
     }
+}
+
+/**
+ * Small always-on pending-count badge mounted into ST's own send-form row,
+ * independent of uiMode (banner/float/dock headers don't all carry a pending
+ * indicator today — this covers every mode uniformly). Idempotent: created
+ * once, then only shown/hidden and re-counted.
+ */
+function updateSendBadge() {
+    const host = document.getElementById('leftSendForm');
+    if (!host) return;
+    let $badge = $('#wt-send-badge');
+    if (!$badge.length) {
+        $badge = $(`<div id="wt-send-badge" class="wt-send-badge interactable" title="WorldTracker: pending proposals">
+            <i class="fa-solid fa-compass"></i><span class="wt-badge-n">0</span></div>`);
+        $badge.on('click', () => cfg.handlers.onRevealPending?.());
+        host.appendChild($badge[0]);
+    }
+    const { settings } = cfg;
+    const state = cfg.getState();
+    const pendingCount = state ? state.pending.length : 0;
+    const visible = !!(settings.enabled && chatActive() && pendingCount > 0);
+    $badge.toggle(visible);
+    if (visible) $badge.find('.wt-badge-n').text(pendingCount);
 }
 
 /**

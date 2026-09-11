@@ -177,6 +177,33 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-accent);
 }
 
+/* Mounted into ST's own #leftSendForm — a bare icon among plain glyph
+   icons, not one of our own .wt-btn pills, so its badge needs its own
+   corner-pill geometry rather than the inline suffix above. */
+.wt-send-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.wt-send-badge .wt-badge-n {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: var(--wt-accent);
+    color: #06070d;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+}
+
 .wt-btn.wt-spin {
     border-color: #f85149;
     color: #f85149;

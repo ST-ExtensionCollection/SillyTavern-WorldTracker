@@ -104,6 +104,16 @@ function onToggleExpand(expand) {
     refresh();
 }
 
+/** Send-box badge click: reveal the review UI regardless of uiMode — setting
+ *  both flags is a harmless no-op for whichever mode isn't active, since each
+ *  render function only reads its own. */
+function onRevealPending() {
+    settings.bannerExpanded = true;
+    settings.panelCollapsed = false;
+    saveSettingsDebounced();
+    refresh();
+}
+
 function onModeChange(mode) {
     settings.uiMode = mode;
     saveSettingsDebounced();
@@ -899,7 +909,7 @@ jQuery(async () => {
     state.init();
 
     initPanel({ context: ctx, settings, getState, handlers: {
-        onEdit, onToggleLock, onToggleExpand, onModeChange, onManualUpdate,
+        onEdit, onToggleLock, onToggleExpand, onRevealPending, onModeChange, onManualUpdate,
         onUpdateButton, onSetUpdater, onRemoveCharacter, onApprove, onApproveExpected,
         onDecline, onApproveAll, onDeclineAll, onOpenSettings, onPersistLayout, onDockSide, onCollapse, onToggleNpc,
         onToggleFieldGroup, onSetPresent, onAddParticipants, onReorderCharacters,

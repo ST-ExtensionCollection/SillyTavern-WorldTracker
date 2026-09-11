@@ -14,6 +14,16 @@ import * as profiles from './src/profiles.js';
 import { openSettingsModal } from './src/ui/settings-modal.js';
 import { initPanel, renderPanel, replaceBanner, setBusy, groupMemberNames } from './src/ui/panel.js';
 
+const RETRY_DELAY_MS = 1500;
+
+/** Resolve on timeout, or early if `signal` aborts (so a stop mid-delay doesn't wait it out). */
+function delay(ms, signal) {
+    return new Promise((resolve) => {
+        const t = setTimeout(resolve, ms);
+        signal?.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+    });
+}
+
 const ctx = SillyTavern.getContext();
 const {
     eventSource,
@@ -239,28 +249,57 @@ async function onManualUpdate(opts = {}) {
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
     vlog(`scope: writable=[${writable.join(', ')}] others=[${Object.keys(st.characters).filter((k) => !writable.includes(k)).join(', ')}]`);
 
+    const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable, settings.discoverNpcs !== false) : null;
+    const maxAttempts = settings.retryEnabled
+        ? (settings.retryUnlimited ? Infinity : 1 + Math.max(1, Math.min(20, Number(settings.retryMax) || 3)))
+        : 1;
+
     try {
-        const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable, settings.discoverNpcs !== false) : null;
-        const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
-        if (job.superseded) { log('response ignored (superseded)'); return; }
-        vlog('tracker response (first 500):', String(text || '').slice(0, 500));
-        const res = parseTrackerResponse(text);
-        if (!res.ok) {
-            log('parse FAILED. data:', res.data, 'raw:', res.raw);
-            toastr.warning('WorldTracker: could not parse tracker response (see console).');
+        for (let attempt = 1; ; attempt++) {
+            if (job.superseded) { log('response ignored (superseded)'); return; }
+
+            if (attempt > 1) {
+                setBusy(true, { attempt, max: Number.isFinite(maxAttempts) ? maxAttempts : '∞' });
+                log(`tracker retry ${attempt}${Number.isFinite(maxAttempts) ? `/${maxAttempts}` : ''} in ${RETRY_DELAY_MS}ms`);
+                await delay(RETRY_DELAY_MS, job.controller.signal);
+                if (job.superseded) { log('response ignored (superseded during retry delay)'); return; }
+                job.controller = new AbortController(); // fresh signal per attempt; stop/preempt aborts THIS one
+            }
+
+            let res = null;
+            let failKind = null;
+            let failErr = null;
+            try {
+                const text = await runTrackerRequest(messages, settings, c, job.controller.signal, schema);
+                if (job.superseded) { log('response ignored (superseded)'); return; }
+                vlog('tracker response (first 500):', String(text || '').slice(0, 500));
+                res = parseTrackerResponse(text);
+                if (!res.ok) { failKind = 'parse'; log('parse FAILED. data:', res.data, 'raw:', res.raw); }
+            } catch (err) {
+                if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
+                failKind = 'request';
+                failErr = err;
+                log('request error:', err);
+            }
+
+            if (!failKind) {
+                log('parsed tracker data:', res.data);
+                vlog('parsed characters:', JSON.stringify(res.data?.characters ?? null));
+                ingestProposals(st, diffToProposals(st, res.data, {
+                    sourceMessageId: srcId, authorName, sections: settings.sections || {},
+                    narratorName: settings.narratorName || '', playerName: c.name1 || '', srcIsUser,
+                    discoverNpcs: settings.discoverNpcs !== false,
+                }));
+                return;
+            }
+
+            if (attempt < maxAttempts) continue; // maxAttempts=1 (retry off) never retries
+
+            if (attempt > 1) toastr.error(`WorldTracker: update failed after ${attempt} attempts (see console).`);
+            else if (failKind === 'parse') toastr.warning('WorldTracker: could not parse tracker response (see console).');
+            else toastr.error(`WorldTracker request failed: ${failErr?.message || failErr}`);
             return;
         }
-        log('parsed tracker data:', res.data);
-        vlog('parsed characters:', JSON.stringify(res.data?.characters ?? null));
-        ingestProposals(st, diffToProposals(st, res.data, {
-            sourceMessageId: srcId, authorName, sections: settings.sections || {},
-            narratorName: settings.narratorName || '', playerName: c.name1 || '', srcIsUser,
-            discoverNpcs: settings.discoverNpcs !== false,
-        }));
-    } catch (err) {
-        if (job.superseded || job.controller.signal.aborted) { log('request aborted'); return; }
-        log('request error:', err);
-        toastr.error(`WorldTracker request failed: ${err?.message || err}`);
     } finally {
         if (updateJob === job) { updateJob = null; setBusy(false); }
     }
@@ -703,6 +742,19 @@ function buildSettingsDrawer() {
                     <span>Inherit samplers from the profile's preset (temp, DRY, rep pen…)</span>
                 </label>
                 <label class="checkbox_label">
+                    <input type="checkbox" id="wt-retry-enabled">
+                    <span>Automatically retry a failed/unparseable update</span>
+                </label>
+                <div class="wt-setting-row">
+                    <label for="wt-retry-max">Max retries</label>
+                    <input type="number" id="wt-retry-max" class="text_pole" min="1" max="20">
+                    <label class="checkbox_label">
+                        <input type="checkbox" id="wt-retry-unlimited">
+                        <span>Unlimited (retry until it succeeds or you stop it)</span>
+                    </label>
+                    <small class="notes">On a request error or unparseable response, retries automatically (~1.5s between attempts). "Max retries" is on top of the first try (3 = up to 4 attempts total); ignored when Unlimited is checked. Click the ⟳/stop button at any time to cancel.</small>
+                </div>
+                <label class="checkbox_label">
                     <input type="checkbox" id="wt-debug">
                     <span>Verbose console logging</span>
                 </label>
@@ -798,6 +850,18 @@ function buildSettingsDrawer() {
         .on('change', function () { settings.structuredOutput = this.checked; saveSettingsDebounced(); });
     $('#wt-inherit-preset').prop('checked', !!settings.inheritPreset)
         .on('change', function () { settings.inheritPreset = this.checked; saveSettingsDebounced(); });
+
+    $('#wt-retry-enabled').prop('checked', !!settings.retryEnabled)
+        .on('change', function () { settings.retryEnabled = this.checked; saveSettingsDebounced(); });
+    $('#wt-retry-max').val(Math.max(1, Math.min(20, Number(settings.retryMax) || 3)))
+        .on('change', function () {
+            settings.retryMax = Math.max(1, Math.min(20, Number(this.value) || 3));
+            this.value = settings.retryMax;
+            saveSettingsDebounced();
+        });
+    $('#wt-retry-unlimited').prop('checked', !!settings.retryUnlimited)
+        .on('change', function () { settings.retryUnlimited = this.checked; saveSettingsDebounced(); });
+
     $('#wt-debug').prop('checked', !!settings.debug)
         .on('change', function () { settings.debug = this.checked; setVerbose(this.checked); saveSettingsDebounced(); });
 

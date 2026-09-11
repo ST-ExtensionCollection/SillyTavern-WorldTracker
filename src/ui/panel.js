@@ -22,11 +22,18 @@ export function initPanel(config) {
     cfg = config;
 }
 
-/** Toggle the refresh button between "update now" and "stop" (spinner). */
-export function setBusy(busy) {
+/**
+ * Toggle the refresh button between "update now" and "stop" (spinner).
+ * `info` = { attempt, max } shows retry progress in the title while busy;
+ * omit for the plain "in progress" / "idle" titles.
+ */
+export function setBusy(busy, info = null) {
     const $btn = $('.wt-update');
     $btn.toggleClass('wt-spin', !!busy);
-    $btn.attr('title', busy ? 'Stop the running update' : 'Update tracker now');
+    const title = (busy && info && info.attempt > 1)
+        ? `Retrying (${info.attempt}/${info.max}) — click to stop`
+        : (busy ? 'Stop the running update' : 'Update tracker now');
+    $btn.attr('title', title);
     $btn.find('i').attr('class', busy ? 'fa-solid fa-stop' : 'fa-solid fa-rotate');
 }
 

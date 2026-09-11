@@ -28,6 +28,11 @@ function defaultSettings() {
         structuredOutput: true,     // pass a json_schema to force valid JSON
         inheritPreset: false,       // inherit samplers (temp, DRY, rep pen…) from
                                     // the connection profile's bound text-completion preset
+        retryEnabled: true,         // auto-retry a failed/unparseable tracker response
+        retryMax: 3,                // retry attempts ON TOP OF the first (ignored if
+                                    // retryUnlimited); 3 => 4 attempts total
+        retryUnlimited: false,      // keep retrying until success or manually stopped;
+                                    // ignores retryMax
         debug: false,               // verbose console logging
 
         // --- approval ---

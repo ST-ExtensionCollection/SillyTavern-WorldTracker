@@ -1230,7 +1230,7 @@ body:has(#wt-inline) #extensionTopBar {
     color: var(--wt-fg);
 }
 
-.wt-cfg-sec label {
+.wt-cfg-sec label:not(.checkbox_label) {
     display: block;
     margin: 0.25rem 0;
 }

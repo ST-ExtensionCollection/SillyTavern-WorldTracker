@@ -236,8 +236,11 @@ async function onManualUpdate(opts = {}) {
         if (baseData && baseData.clock && baseData.clock.iso) st.clock.iso = baseData.clock.iso;
     }
 
+    const chatSettings = st.settings || {};
+    const discoverNpcsEff = settings.discoverNpcs !== false && chatSettings.discoverNpcs !== false;
+
     const writable = writableNames(st, authorName, settings.narratorName || '', c.name1 || '', srcIsUser);
-    const { messages } = buildTrackerPrompt(st, recent, { settings, playerName: c.name1, authorName, firstTurn, srcIsUser });
+    const { messages } = buildTrackerPrompt(st, recent, { settings: { ...settings, discoverNpcs: discoverNpcsEff }, playerName: c.name1, authorName, firstTurn, srcIsUser });
 
     // Snapshot the pre-query state (write-once) so a later swipe/regen/delete of
     // this message can revert cleanly.
@@ -249,7 +252,7 @@ async function onManualUpdate(opts = {}) {
     log(`tracker request: ${recent.length} msg(s), src #${srcId}${authorName ? ` by ${authorName}` : ''}, ${messages.reduce((a, m) => a + m.content.length, 0)} chars`);
     vlog(`scope: writable=[${writable.join(', ')}] others=[${Object.keys(st.characters).filter((k) => !writable.includes(k)).join(', ')}]`);
 
-    const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable, settings.discoverNpcs !== false) : null;
+    const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable, discoverNpcsEff) : null;
     const maxAttempts = settings.retryEnabled
         ? (settings.retryUnlimited ? Infinity : 1 + Math.max(1, Math.min(20, Number(settings.retryMax) || 3)))
         : 1;
@@ -288,7 +291,10 @@ async function onManualUpdate(opts = {}) {
                 ingestProposals(st, diffToProposals(st, res.data, {
                     sourceMessageId: srcId, authorName, sections: settings.sections || {},
                     narratorName: settings.narratorName || '', playerName: c.name1 || '', srcIsUser,
-                    discoverNpcs: settings.discoverNpcs !== false,
+                    discoverNpcs: discoverNpcsEff,
+                    npcBlacklist: chatSettings.npcBlacklist || '',
+                    requireRecentMention: !!chatSettings.requireRecentMention,
+                    recent,
                 }));
                 return;
             }

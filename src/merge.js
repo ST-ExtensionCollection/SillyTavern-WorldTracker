@@ -16,6 +16,34 @@ function isRealName(n) {
     return !!String(n ?? '').trim();
 }
 
+/** Parse a newline-separated blacklist into a lowercased, trimmed Set. */
+export function parseBlacklist(text) {
+    const out = new Set();
+    for (const line of String(text ?? '').split('\n')) {
+        const t = line.trim().toLowerCase();
+        if (t) out.add(t);
+    }
+    return out;
+}
+
+/** EXACT case-insensitive match of `name` against a blacklist Set. */
+function isBlacklisted(name, blacklistSet) {
+    return !!blacklistSet?.size && blacklistSet.has(String(name ?? '').trim().toLowerCase());
+}
+
+function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** True when `name` appears as a whole word/phrase (case-insensitive) in any recent message. */
+function mentionedInRecent(name, recent) {
+    const n = String(name ?? '').trim();
+    if (!n || !Array.isArray(recent) || !recent.length) return false;
+    let re;
+    try { re = new RegExp(`\\b${escapeRegExp(n)}\\b`, 'i'); } catch { return false; }
+    return recent.some((m) => re.test(String(m?.mes ?? '')));
+}
+
 /** Loose equality for field values (trim strings, compare numbers numerically). */
 function sameValue(field, incoming) {
     const cur = field.value;
@@ -77,7 +105,12 @@ function fieldProposal(path, label, field, incoming, sourceMessageId) {
  * @returns {Array} proposals
  */
 export function diffToProposals(st, data, opts = {}) {
-    const { sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '', srcIsUser = false, discoverNpcs = true } = opts;
+    const {
+        sourceMessageId = null, authorName = null, sections = {}, narratorName = '', playerName = '',
+        srcIsUser = false, discoverNpcs = true,
+        npcBlacklist = '', requireRecentMention = false, recent = [],
+    } = opts;
+    const blacklist = parseBlacklist(npcBlacklist);
     const out = [];
     if (!data || typeof data !== 'object') return out;
 
@@ -162,8 +195,17 @@ export function diffToProposals(st, data, opts = {}) {
             if (!isRealName(name)) continue; // guard against "null"/"undefined"/"" keys
             const entry = st.characters[name];
             if (!entry) {
-                const asNew = discoverNpcs && inScope({ updater: 'narrator' }, name, authorName, narratorName);
-                vlog(`diff: "${name}" not a tracked card -> ${asNew ? 'new-character proposal' : (discoverNpcs ? 'skipped (out of scope)' : 'skipped (discovery off)')}`);
+                const blacklisted = isBlacklisted(name, blacklist);
+                const mentioned = !requireRecentMention || mentionedInRecent(name, recent);
+                const asNew = discoverNpcs && !blacklisted && mentioned
+                    && inScope({ updater: 'narrator' }, name, authorName, narratorName);
+                vlog(`diff: "${name}" not a tracked card -> ${
+                    asNew ? 'new-character proposal'
+                    : !discoverNpcs ? 'skipped (discovery off)'
+                    : blacklisted ? 'skipped (blacklisted)'
+                    : !mentioned ? 'skipped (not in recent messages)'
+                    : 'skipped (out of scope)'
+                }`);
                 if (asNew) {
                     out.push({
                         path: `characters.${name}`, kind: 'new-character', label: `Track ${name}`,

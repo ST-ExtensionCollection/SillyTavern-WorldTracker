@@ -8,6 +8,7 @@ import { defaultSchema, normGroup } from '../schema.js';
 import { groupMemberNames } from './panel.js';
 import { makeSortable } from './drag.js';
 import * as profiles from '../profiles.js';
+import * as state from '../state.js';
 
 const TYPES = ['text', 'number', 'enum'];
 const DEFAULT_SECTIONS = { world: true, userStats: false, characters: true };
@@ -326,6 +327,39 @@ export async function openSettingsModal(ctx, settings, persist) {
         saveGlobal();
     });
 
+    // NPC discovery controls are true per-chat-FILE state (chat_metadata), not
+    // per character/group like narratorByChat above — they don't carry over to
+    // a different chat with the same character.
+    const stForChat = state.get(settings.schema);
+    const cs = stForChat?.settings || {};
+    const $npcBar = $(`
+        <div class="wt-cfg-sec">
+            <div class="wt-cfg-sec-head"><span class="wt-cfg-head-label"><i class="wt-cfg-chevron fa-solid fa-chevron-down"></i> NPC discovery (this chat)</span></div>
+            <label class="checkbox_label">
+                <input type="checkbox" class="wt-npc-suggest"${stForChat ? '' : ' disabled'}>
+                <span>Suggest new NPCs in this chat</span>
+            </label>
+            <label class="checkbox_label">
+                <input type="checkbox" class="wt-npc-require-mention"${stForChat ? '' : ' disabled'}>
+                <span>Only suggest names that appear verbatim in a recent message</span>
+            </label>
+            <label>Never suggest these names (one per line)
+                <textarea class="text_pole wt-npc-blacklist" rows="3" placeholder="Present&#10;Tracking"${stForChat ? '' : ' disabled'}></textarea>
+            </label>
+            <small class="notes">${stForChat
+        ? 'Per chat file — not shared with other chats and not saved in a profile. The global "Discover new characters" toggle in the Extensions panel must also be on.'
+        : 'No chat open to bind this to.'}</small>
+        </div>
+    `);
+    if (stForChat) {
+        $npcBar.find('.wt-npc-suggest').prop('checked', cs.discoverNpcs !== false)
+            .on('change', function () { state.setChatDiscoverNpcs(stForChat, this.checked); });
+        $npcBar.find('.wt-npc-require-mention').prop('checked', !!cs.requireRecentMention)
+            .on('change', function () { state.setChatRequireRecentMention(stForChat, this.checked); });
+        $npcBar.find('.wt-npc-blacklist').val(cs.npcBlacklist || '')
+            .on('change', function () { state.setChatNpcBlacklist(stForChat, this.value); });
+    }
+
     const $wrap = $('<div class="wt-cfg"></div>');
     const $bar = $(`
         <div class="wt-cfg-sec wt-profile-bar">
@@ -343,7 +377,7 @@ export async function openSettingsModal(ctx, settings, persist) {
         </div>
     `);
     const $bodyHost = $('<div class="wt-cfg-body-host"></div>').append(body.$c);
-    $wrap.append($narrBar, $bar, $bodyHost);
+    $wrap.append($narrBar, $npcBar, $bar, $bodyHost);
 
     $bar.find('.wt-cfg-sec-head').on('click', (e) => {
         if ($(e.target).closest('button, select, input').length) return;
@@ -352,6 +386,10 @@ export async function openSettingsModal(ctx, settings, persist) {
     $narrBar.find('.wt-cfg-sec-head').on('click', (e) => {
         if ($(e.target).closest('button, select, input').length) return;
         $narrBar.toggleClass('wt-collapsed');
+    });
+    $npcBar.find('.wt-cfg-sec-head').on('click', (e) => {
+        if ($(e.target).closest('button, select, input, textarea').length) return;
+        $npcBar.toggleClass('wt-collapsed');
     });
 
     const rebuild = (data) => {

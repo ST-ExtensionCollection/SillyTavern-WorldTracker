@@ -16,6 +16,7 @@
 //     },
 //     pending: [ { id, path, label, from, to, reason, sourceMessageId, ts } ],
 //     history: [ { id, mesId, swipeId, ts, trigger, changes: [ {path,label,kind,before,after,rawBefore,rawAfter,beforeIso?,afterIso?} ] } ],
+//     settings: { discoverNpcs, npcBlacklist, requireRecentMention },
 //     _v: 2
 //   }
 
@@ -65,6 +66,11 @@ export function save() {
     }
 }
 
+/** Default per-chat NPC-discovery controls (fully permissive — matches legacy behavior). */
+function defaultChatSettings() {
+    return { discoverNpcs: true, npcBlacklist: '', requireRecentMention: false };
+}
+
 /** Build a fresh state object from a schema. */
 function seedFromSchema(schema) {
     const s = schema ?? defaultSchema();
@@ -82,6 +88,7 @@ function seedFromSchema(schema) {
         characters: {},
         pending: [],
         snapshots: {}, // { [messageIndex]: {clock,world,userStats,characters} } for swipe/revert
+        settings: defaultChatSettings(),
     };
     for (const f of s.world ?? []) {
         state.world[f.key] = {
@@ -130,6 +137,13 @@ function reconcile(state, schema) {
         }
     }
     if (!Array.isArray(state.history)) state.history = [];
+    if (!state.settings || typeof state.settings !== 'object') {
+        state.settings = defaultChatSettings();
+    } else {
+        if (typeof state.settings.discoverNpcs !== 'boolean') state.settings.discoverNpcs = true;
+        if (typeof state.settings.npcBlacklist !== 'string') state.settings.npcBlacklist = '';
+        if (typeof state.settings.requireRecentMention !== 'boolean') state.settings.requireRecentMention = false;
+    }
     for (const name of Object.keys(state.characters)) {
         if (!name.trim()) { delete state.characters[name]; continue; } // empty key = junk
         const c = state.characters[name];
@@ -393,6 +407,27 @@ export function setLock(state, path, locked) {
         f.locked = !!locked;
         save();
     }
+}
+
+export function setChatDiscoverNpcs(state, val) {
+    if (!state) return;
+    if (!state.settings) state.settings = defaultChatSettings();
+    state.settings.discoverNpcs = !!val;
+    save();
+}
+
+export function setChatNpcBlacklist(state, text) {
+    if (!state) return;
+    if (!state.settings) state.settings = defaultChatSettings();
+    state.settings.npcBlacklist = String(text ?? '');
+    save();
+}
+
+export function setChatRequireRecentMention(state, val) {
+    if (!state) return;
+    if (!state.settings) state.settings = defaultChatSettings();
+    state.settings.requireRecentMention = !!val;
+    save();
 }
 
 /** Human label for a path, for cards / queue rows. */

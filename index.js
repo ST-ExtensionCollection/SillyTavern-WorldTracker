@@ -253,6 +253,7 @@ async function onManualUpdate(opts = {}) {
     vlog(`scope: writable=[${writable.join(', ')}] others=[${Object.keys(st.characters).filter((k) => !writable.includes(k)).join(', ')}]`);
 
     const schema = settings.structuredOutput ? buildResponseSchema(st, settings.sections || {}, firstTurn, writable, discoverNpcsEff) : null;
+    vlog(`structured output: enabled=${!!settings.structuredOutput}, schema=${schema ? `built [top-level keys: ${Object.keys(schema).join(', ')}]` : 'NULL'}`);
     const maxAttempts = settings.retryEnabled
         ? (settings.retryUnlimited ? Infinity : 1 + Math.max(1, Math.min(20, Number(settings.retryMax) || 3)))
         : 1;

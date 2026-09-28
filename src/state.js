@@ -357,6 +357,102 @@ export function peekSnapshot(state, index) {
     return key == null ? null : readSnap(state, key);
 }
 
+// ---------------------------------------------------------------------------
+// Position shifts (mid-chat delete, spliced ranges)
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-key everything indexed by message position after `removed` messages at
+ * `start` were replaced by `inserted` new ones. Indices before `start` stay,
+ * indices past the span shift by `inserted - removed`, indices inside it are
+ * dropped — except the snapshot AT `start` when the span was replaced (it is
+ * still the valid pre-state of the new first message). Surviving deltas whose
+ * chain runs through a dropped key are promoted to keyframes first.
+ *
+ * Canonical state is not touched and nothing is saved. Returns what was
+ * dropped, with indices relative to `start` (snapshots as full keyframes), so
+ * restoreDropped() can put it back after an undo.
+ */
+export function remapIndices(st, { start, removed = 0, inserted = 0 } = {}) {
+    const out = { dropped: { snapshots: {}, history: [], pending: [] }, shifted: 0 };
+    if (!st || !Number.isInteger(start) || start < 0) { warn('remapIndices: bad start', start); return out; }
+    removed = Math.max(0, Number(removed) || 0);
+    inserted = Math.max(0, Number(inserted) || 0);
+    const delta = inserted - removed;
+    const where = (i) => (i < start ? 'keep' : i >= start + removed ? 'shift' : 'inside');
+    const moved = (i) => (where(i) === 'shift' ? i + delta : i);
+
+    if (!st.snapshots || typeof st.snapshots !== 'object') st.snapshots = {};
+    const snaps = st.snapshots;
+    const keys = Object.keys(snaps).map(Number).filter(Number.isFinite);
+    const keepStart = removed > 0 && inserted > 0;
+    const drop = new Set(keys.filter((k) => where(k) === 'inside' && !(k === start && keepStart)));
+
+    for (const k of drop) {
+        const full = readSnap(st, k);
+        if (full) out.dropped.snapshots[k - start] = { kf: true, data: full };
+    }
+    const crossesDrop = (key) => {
+        let k = key;
+        for (let hops = 0; hops < 300; hops++) {
+            const e = snaps[k];
+            if (!e || e.kf || !('base' in e)) return false;
+            k = Number(e.base);
+            if (drop.has(k)) return true;
+        }
+        return false;
+    };
+    for (const k of keys) {
+        if (drop.has(k) || !crossesDrop(k)) continue;
+        const full = readSnap(st, k);
+        if (full) snaps[k] = { kf: true, data: full };
+        else warn(`remapIndices: could not promote snapshot #${k}`);
+    }
+
+    const next = {};
+    for (const k of keys) {
+        if (drop.has(k)) continue;
+        const e = snaps[k];
+        if (e && !e.kf && 'base' in e) e.base = moved(Number(e.base));
+        if (where(k) === 'shift' && delta) out.shifted++;
+        next[moved(k)] = e;
+    }
+    st.snapshots = next;
+
+    const remapList = (list, field, bin) => (Array.isArray(list) ? list : []).filter((item) => {
+        const v = item?.[field];
+        if (!Number.isInteger(v)) return true;
+        if (where(v) === 'inside') {
+            bin.push({ ...deepCopy(item), [field]: v - start });
+            return false;
+        }
+        item[field] = moved(v);
+        return true;
+    });
+    st.history = remapList(st.history, 'mesId', out.dropped.history);
+    st.pending = remapList(st.pending, 'sourceMessageId', out.dropped.pending);
+
+    vlog(`remapIndices(start=${start}, removed=${removed}, inserted=${inserted}): shifted ${out.shifted} snaps, dropped ${drop.size} snaps / ${out.dropped.history.length} history / ${out.dropped.pending.length} pending`);
+    return out;
+}
+
+/** Put back entries remapIndices() dropped, re-homed at `start`. Existing keys win. */
+export function restoreDropped(st, start, dropped) {
+    if (!st || !dropped || !Number.isInteger(start)) return;
+    if (!st.snapshots || typeof st.snapshots !== 'object') st.snapshots = {};
+    for (const [off, e] of Object.entries(dropped.snapshots ?? {})) {
+        const k = start + Number(off);
+        if (Number.isInteger(k) && k >= 0 && !(k in st.snapshots)) st.snapshots[k] = e;
+    }
+    trimSnapshots(st);
+    const rehome = (list, field) => (list ?? []).map((item) => ({ ...item, [field]: start + item[field] }));
+    if (!Array.isArray(st.history)) st.history = [];
+    st.history.push(...rehome(dropped.history, 'mesId'));
+    st.history.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+    if (!Array.isArray(st.pending)) st.pending = [];
+    st.pending.push(...rehome(dropped.pending, 'sourceMessageId'));
+}
+
 /**
  * Rebuild canonical state for message `mesId`'s swipe `swipeId`: start from the
  * pre-query snapshot, then replay every history record tagged with that

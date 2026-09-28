@@ -1069,14 +1069,49 @@ jQuery(async () => {
         if (['user', 'both'].includes(settings.autoMode)) autoUpdate('user message', id);
     });
 
+    // --- message identity, to decode MESSAGE_DELETED ---
+    // ST emits the post-delete chat.length, not which message went — a single
+    // mid-chat delete looks like a tail truncation. Keep the last-seen message
+    // objects and diff against them to find the range that actually went.
+    let seenChat = [];
+    const captureChat = () => {
+        try { seenChat = [...(SillyTavern.getContext().chat ?? [])]; } catch { seenChat = []; }
+    };
+    const findDeletion = () => {
+        const before = seenChat;
+        const after = SillyTavern.getContext().chat ?? [];
+        const count = before.length - after.length;
+        if (count <= 0) return null;
+        let start = 0;
+        while (start < after.length && before[start] === after[start]) start++;
+        for (let i = start; i < after.length; i++) if (before[i + count] !== after[i]) return null;
+        return { start, count, isTail: start === after.length };
+    };
+    for (const ev of ['CHAT_CHANGED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED', 'USER_MESSAGE_RENDERED', 'CHARACTER_MESSAGE_RENDERED']) {
+        if (event_types[ev]) eventSource.on(event_types[ev], () => captureChat());
+    }
+    captureChat();
+
     // --- delete safety: revert to the pre-query snapshot ---
-    // MESSAGE_DELETED gives the post-splice chat.length — the truncation point.
+    // MESSAGE_DELETED gives the post-splice chat.length — the truncation point
+    // for a tail delete. A mid-chat delete instead shifts later indices down.
     const onRevert = (rawId, why) => {
         const id = Number(rawId);
-        vlog(`revert event: ${why}, rawId=${JSON.stringify(rawId)} -> ${id}`);
+        const del = findDeletion();
+        captureChat();
+        vlog(`revert event: ${why}, rawId=${JSON.stringify(rawId)} -> ${id}, decoded=${JSON.stringify(del)}`);
         const st = getState();
         if (!st || !Number.isFinite(id)) { vlog('revert: no state or bad id'); return; }
         stopUpdate('revert');
+        if (del && !del.isTail) {
+            // Later messages still stand, so canonical state stays; only the
+            // deleted messages' snapshots/history/pending go.
+            const r = state.remapIndices(st, { start: del.start, removed: del.count, inserted: 0 });
+            state.save();
+            log(`mid-chat delete @${del.start} x${del.count} (${why}): shifted ${r.shifted} snaps, dropped ${Object.keys(r.dropped.snapshots).length} snaps / ${r.dropped.history.length} history / ${r.dropped.pending.length} pending`);
+            refresh();
+            return;
+        }
         const r = state.restoreFrom(st, id);
         log(`revert @${id} (${why}): restored=${r.restored} usedKey=${r.usedKey} pruned=${r.prunedPending} pending`);
         refresh();

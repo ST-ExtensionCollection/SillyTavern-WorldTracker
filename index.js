@@ -1172,6 +1172,47 @@ jQuery(async () => {
         eventSource.on(event_types.MESSAGE_SWIPE_DELETED, (o) => onSwipeDeleted(o));
     }
 
+    // --- Timeline Retcon Merger: a message range was spliced mid-chat ---
+    // Payload { direction: 'merge'|'undo', chatId, start, removed, inserted, retconId? }.
+    // Emitted after TRM saved the chat and right before it reloads it, so save
+    // now — a debounced save would land on the reloaded metadata and be lost.
+    // What a merge drops is stashed per retconId and put back on its undo.
+    const RETCON_STASH_CAP = 20;
+    eventSource.on('timeline_retcon_applied', async (p) => {
+        const c = SillyTavern.getContext();
+        const st = c.chatMetadata?.[state.META_KEY];
+        if (!st || typeof st !== 'object' || !Number.isInteger(p?.start)) return;
+        let chatId;
+        try { chatId = c.getCurrentChatId?.(); } catch { /* ignore */ }
+        if (p.chatId != null && chatId != null && String(p.chatId) !== String(chatId)) {
+            vlog(`retcon for another chat (${p.chatId}), ignoring`);
+            return;
+        }
+        stopUpdate('retcon');
+        const r = state.remapIndices(st, { start: p.start, removed: p.removed, inserted: p.inserted });
+        const id = p.retconId != null ? String(p.retconId) : null;
+        const d = r.dropped;
+        let restored = false;
+        if (p.direction === 'undo') {
+            const stash = id && st.retconStash?.[id];
+            if (stash) {
+                state.restoreDropped(st, p.start, stash.dropped);
+                delete st.retconStash[id];
+                restored = true;
+            }
+        } else if (id && (Object.keys(d.snapshots).length || d.history.length || d.pending.length)) {
+            if (!st.retconStash || typeof st.retconStash !== 'object') st.retconStash = {};
+            st.retconStash[id] = { ts: Date.now(), dropped: d };
+            const ids = Object.keys(st.retconStash).sort((a, b) => st.retconStash[a].ts - st.retconStash[b].ts);
+            while (ids.length > RETCON_STASH_CAP) delete st.retconStash[ids.shift()];
+        }
+        try { await c.saveMetadata(); } catch (e) { log('retcon: metadata save failed', e); }
+        captureChat();
+        log(`retcon ${p.direction} @${p.start} -${p.removed}+${p.inserted}: shifted ${r.shifted} snaps, dropped ${Object.keys(d.snapshots).length} snaps / ${d.history.length} history / ${d.pending.length} pending${restored ? ', restored stashed states' : ''}`);
+    });
+    // Tells Timeline Retcon Merger to leave our metadata to us.
+    globalThis.WorldTracker = { ...(globalThis.WorldTracker || {}), handlesRetconEvent: true };
+
     // The chat layout (#sheld) and sibling extensions like TopInfoBar may not be
     // in the DOM yet when we boot. Re-place the banner once things settle.
     if (event_types.APP_READY) eventSource.once(event_types.APP_READY, () => replaceBanner());

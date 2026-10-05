@@ -4,7 +4,7 @@
 // does not disturb the main chat or its connection). Fallback: the main API via
 // generateRaw / generateQuietPrompt.
 
-import { log, warn } from './log.js';
+import { log, warn, vlog } from './log.js';
 
 /** List connection profiles, if the Connection Manager is present. */
 export function listProfiles(ctx) {
@@ -18,6 +18,20 @@ function textFrom(out) {
         ?? out.choices?.[0]?.message?.content ?? out.choices?.[0]?.text ?? '';
     // With json_schema, ST may hand back an already-parsed object.
     return typeof c === 'object' ? JSON.stringify(c) : c;
+}
+
+/** Wrap a bare JSON Schema in the { name, strict, value } envelope ST expects.
+ *  openai.js forwards the whole `jsonSchema` option as generate_data.json_schema,
+ *  and the consumer reads `name`/`strict`/`value` from it to build the wire
+ *  response_format — a `schema`-keyed envelope puts name+strict on the wire but
+ *  leaves schema undefined (confirmed by request logs), while a bare schema
+ *  object leaves all three unset. */
+function schemaEnvelope(schema) {
+    if (schema?.type === 'json_schema' && schema.json_schema) {
+        const e = schema.json_schema;
+        return { name: e.name ?? 'WorldTrackerState', strict: e.strict ?? false, value: e.schema ?? e.value };
+    }
+    return { name: 'WorldTrackerState', strict: false, value: schema };
 }
 
 /**
@@ -37,7 +51,10 @@ export async function runTrackerRequest(messages, settings, ctx, signal, schema)
     const override = {};
     if (settings.reasoningEffort) override.reasoning_effort = settings.reasoningEffort;
     if (settings.structuredOutput && schema) {
-        override.json_schema = { name: 'WorldTrackerState', strict: false, value: schema };
+        // The connection service recognizes the `json_schema` override key
+        // (a `response_format` override is silently dropped) and builds the
+        // wire response_format from the object's `name`/`strict`/`value` fields.
+        override.json_schema = schemaEnvelope(schema);
     }
 
     const profiles = listProfiles(ctx);
@@ -49,7 +66,7 @@ export async function runTrackerRequest(messages, settings, ctx, signal, schema)
     const inheritPreset = !!settings.inheritPreset;
 
     if (profile && ctx.ConnectionManagerRequestService) {
-        log(`request via connection profile "${profile.name}" (max_tokens ${maxTokens}, effort ${settings.reasoningEffort || 'default'}, preset ${inheritPreset ? 'inherited' : 'off'})`);
+        log(`request via connection profile "${profile.name}" (max_tokens ${maxTokens}, effort ${settings.reasoningEffort || 'default'}, preset ${inheritPreset ? 'inherited' : 'off'}, ${override.json_schema ? 'json_schema attached' : 'no schema'})`);
         // Stream it: a non-streaming request runs to completion on the backend
         // even after the client aborts (the abort only lands at send time). A
         // streamed request dies the moment the connection drops — that's how
@@ -81,12 +98,20 @@ export async function runTrackerRequest(messages, settings, ctx, signal, schema)
     const userMsg = messages.filter((m) => m.role !== 'system').map((m) => m.content).join('\n\n');
 
     if (typeof ctx.generateRaw === 'function') {
-        log('request via main API (generateRaw)');
+        log(`request via main API (generateRaw)${(settings.structuredOutput && schema) ? ', json_schema attached' : ', no schema'}`);
+        vlog('generateRaw options (exact):', JSON.stringify({
+            responseLength: maxTokens,
+            jsonSchema: (settings.structuredOutput && schema) ? schemaEnvelope(schema) : null,
+        }, (k, v) => (k === 'value' ? `${JSON.stringify(v).slice(0, 200)}…` : v)));
         return await ctx.generateRaw({
             prompt: userMsg || flat,
             systemPrompt: sysMsg,
             responseLength: maxTokens,
-            jsonSchema: (settings.structuredOutput && schema) ? schema : null,
+            // The whole option object is forwarded as json_schema; the server
+            // builds response_format from its name/strict/value fields.
+            jsonSchema: (settings.structuredOutput && schema)
+                ? schemaEnvelope(schema)
+                : null,
         });
     }
 
